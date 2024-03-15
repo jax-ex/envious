@@ -1,7 +1,11 @@
 defmodule EnviousTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
-  test "greets the world" do
+  test "simple parse" do
     assert Envious.parse("FOO=bar") == {:ok, %{"FOO" => "bar"}}
+  end
+
+  test "mulitline parse" do
+    assert Envious.parse("FOO=bar\nBAZ=qux") == {:ok, %{"FOO" => "bar", "BAZ" => "qux"}}
   end
 end
