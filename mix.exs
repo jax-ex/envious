@@ -4,10 +4,14 @@ defmodule Envious.MixProject do
   def project do
     [
       app: :envious,
-      version: "0.1.0",
+      version: "0.0.1",
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      description: description(),
+      package: package(),
+      name: "envious",
+      source_url: "https://github.com/jax-ex/envious"
     ]
   end
 
@@ -21,7 +25,21 @@ defmodule Envious.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nimble_parsec, "~> 1.0"}
+      {:nimble_parsec, "~> 1.0"},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
+    ]
+  end
+
+  defp description do
+    """
+    A simple parser for .env files
+    """
+  end
+
+  defp package() do
+    [
+      licenses: ["MIT"],
+      links: %{"GitHub" => "https://github.com/jax-ex/envious"}
     ]
   end
 end
