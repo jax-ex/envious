@@ -11,4 +11,9 @@ defmodule Envious.ParserTest do
     assert Parser.parse("FOO=bar\nBAZ=qux") ==
              {:ok, ["FOO", "bar", "BAZ", "qux"], "", %{}, {2, 8}, 15}
   end
+
+  test "underscore" do
+    assert Parser.parse("FOO_BAR=bar\nBAZ_QUX=qux") ==
+             {:ok, ["FOO_BAR", "bar", "BAZ_QUX", "qux"], "", %{}, {2, 12}, 23}
+  end
 end
