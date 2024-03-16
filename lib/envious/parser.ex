@@ -35,7 +35,7 @@ defmodule Envious.Parser do
 
   var_name =
     empty()
-    |> concat(utf8_string([?A..?Z, ?_], min: 1))
+    |> concat(utf8_string([?A..?Z, ?a..?z, ?_], min: 1))
 
   val =
     empty()

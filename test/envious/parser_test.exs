@@ -16,4 +16,9 @@ defmodule Envious.ParserTest do
     assert Parser.parse("FOO_BAR=bar\nBAZ_QUX=qux") ==
              {:ok, ["FOO_BAR", "bar", "BAZ_QUX", "qux"], "", %{}, {2, 12}, 23}
   end
+
+  test "lowercase env var name" do
+    assert Parser.parse("foo_bar=bar") ==
+             {:ok, ["foo_bar", "bar"], "", %{}, {1, 0}, 11}
+  end
 end
