@@ -14,7 +14,11 @@
             inherit system;
           };
 
-          elixir = pkgs.beam.packages.erlang_25.elixir_1_16;
+          packages = pkgs.beam.packages.erlang_25.extend (final: prev: {
+            # Our project requires elixir-1.16
+            elixir = final.elixir_1_16;
+          });
+          inherit (packages) elixir;
         in {
           devShells.default = pkgs.mkShell {
             buildInputs = with pkgs;
@@ -38,5 +42,23 @@
               export ERL_AFLAGS="-kernel shell_history enabled"
             '';
           };
+
+          packages.default =
+            let
+              mixNixDeps = with pkgs; import ./mix_deps.nix { inherit lib beamPackages; };
+            in
+              packages.buildMix {
+                name = "envious";
+                version = "0.0.1";
+                src = ./.;
+
+                # All packages in mix_deps.nix
+                beamDeps = pkgs.lib.attrValues mixNixDeps;
+
+                # Run tests after build
+                postBuild = ''
+                  mix test --no-deps-check
+                '';
+              };
         });
 }
