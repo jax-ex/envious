@@ -33,8 +33,12 @@ defmodule Envious.Parser do
       equals
     ])
 
+  export = string("export")
+
   var_name =
-    empty()
+    ignore(export)
+    |> ignore(whitespace)
+    |> repeat()
     |> concat(utf8_string([?A..?Z, ?a..?z, ?_], min: 1))
 
   val =

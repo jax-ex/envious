@@ -21,4 +21,14 @@ defmodule Envious.ParserTest do
     assert Parser.parse("foo_bar=bar") ==
              {:ok, ["foo_bar", "bar"], "", %{}, {1, 0}, 11}
   end
+
+  test "export" do
+    file = """
+    export FOO=bar
+    export BAZ=qux
+    """
+
+    assert Parser.parse(file) ==
+             {:ok, ["FOO", "bar", "BAZ", "qux"], "", %{}, {3, 30}, 30}
+  end
 end
