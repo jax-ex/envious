@@ -17,4 +17,14 @@ defmodule EnviousTest do
 
     assert Envious.parse(file) == {:ok, %{"FOO" => "bar", "BAZ" => "qux"}}
   end
+
+  test "ingore comments" do
+    file = """
+    # this is a comment
+    export FOO=bar
+    BAZ=qux # another comment
+    """
+
+    assert Envious.parse(file) == {:ok, %{"FOO" => "bar", "BAZ" => "qux"}}
+  end
 end

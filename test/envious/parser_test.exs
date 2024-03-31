@@ -31,4 +31,15 @@ defmodule Envious.ParserTest do
     assert Parser.parse(file) ==
              {:ok, ["FOO", "bar", "BAZ", "qux"], "", %{}, {3, 30}, 30}
   end
+
+  test "comments" do
+    file = """
+    # this is a comment
+    export FOO=bar
+    BAZ=qux # another comment
+    """
+
+    assert Parser.parse(file) ==
+             {:ok, ["FOO", "bar", "BAZ", "qux"], "", %{}, {4, 61}, 61}
+  end
 end
