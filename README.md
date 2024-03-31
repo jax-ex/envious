@@ -24,7 +24,13 @@ mutate the environment or have any side effects. It is up to the user to
 decide how to use the parsed data.
 
 ```elixir
-Envious.parse(".env")
+dotenv = """
+# My .env file
+export KEY1=value1
+KEY2=value2 # export is optional
+"""
+
+Envious.parse(dotenv)
 # => {:ok, %{"KEY1" => "value1", "KEY2" => "value2"}}
 ```
 ### Example of how one might use this.
