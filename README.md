@@ -10,7 +10,7 @@ by adding `envious` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:envious, "~> 0.1.0"}
+    {:envious, "~> 0.0.2"}
   ]
 end
 ```
