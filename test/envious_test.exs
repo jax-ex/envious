@@ -60,6 +60,33 @@ defmodule EnviousTest do
              {:ok, %{"VERSION" => "1.2.3-beta_1"}}
   end
 
+  # Variable name tests with digits
+  test "variable name with digit at end" do
+    assert Envious.parse("KEY1=value") == {:ok, %{"KEY1" => "value"}}
+  end
+
+  test "variable name with digit in middle" do
+    assert Envious.parse("DB2_HOST=localhost") == {:ok, %{"DB2_HOST" => "localhost"}}
+  end
+
+  test "variable name with multiple digits" do
+    assert Envious.parse("API_V2_URL=example.com") == {:ok, %{"API_V2_URL" => "example.com"}}
+  end
+
+  test "variable name with all digits after first char" do
+    assert Envious.parse("KEY123=value") == {:ok, %{"KEY123" => "value"}}
+  end
+
+  test "variable name starting with digit fails" do
+    assert {:error, message} = Envious.parse("1KEY=value")
+    assert message =~ "line 1"
+  end
+
+  test "variable name as just digit fails" do
+    assert {:error, message} = Envious.parse("1=value")
+    assert message =~ "line 1"
+  end
+
   test "double-quoted value with spaces" do
     assert Envious.parse("MESSAGE=\"Hello World\"") ==
              {:ok, %{"MESSAGE" => "Hello World"}}
@@ -188,5 +215,161 @@ defmodule EnviousTest do
 
   test "only comments parses successfully" do
     assert Envious.parse("# comment\n# another") == {:ok, %{}}
+  end
+
+  # Whitespace edge cases
+  test "leading whitespace in file" do
+    assert Envious.parse("  \n\t\nKEY=value") == {:ok, %{"KEY" => "value"}}
+  end
+
+  test "trailing whitespace in file" do
+    assert Envious.parse("KEY=value\n  \n\t") == {:ok, %{"KEY" => "value"}}
+  end
+
+  test "whitespace around equals sign fails" do
+    # Whitespace around = is not allowed per shell syntax
+    assert {:error, message} = Envious.parse("KEY = value")
+    assert message =~ "line 1"
+  end
+
+  test "multiple blank lines between entries" do
+    assert Envious.parse("FOO=bar\n\n\n\nBAZ=qux") == {:ok, %{"FOO" => "bar", "BAZ" => "qux"}}
+  end
+
+  test "whitespace-only lines" do
+    assert Envious.parse("FOO=bar\n   \t   \nBAZ=qux") == {:ok, %{"FOO" => "bar", "BAZ" => "qux"}}
+  end
+
+  test "tabs in various positions" do
+    assert Envious.parse("\t\tFOO=bar\t\t\nBAZ=qux") == {:ok, %{"FOO" => "bar", "BAZ" => "qux"}}
+  end
+
+  # More error scenarios
+  test "key without equals sign" do
+    assert {:error, message} = Envious.parse("KEYONLY")
+    assert message =~ "line 1"
+  end
+
+  test "multiple equals signs in value" do
+    assert Envious.parse("KEY=a=b=c") == {:ok, %{"KEY" => "a=b=c"}}
+  end
+
+  test "base64-like value with equals" do
+    assert Envious.parse("SECRET=abc123==") == {:ok, %{"SECRET" => "abc123=="}}
+  end
+
+  test "just an equals sign" do
+    assert {:error, message} = Envious.parse("=")
+    assert message =~ "line 1"
+  end
+
+  test "export keyword without key" do
+    assert {:error, message} = Envious.parse("export ")
+    assert message =~ "could not parse"
+  end
+
+  test "export keyword without value" do
+    assert {:error, message} = Envious.parse("export KEY")
+    assert message =~ "could not parse"
+  end
+
+  # Comment edge cases
+  test "empty comment" do
+    assert Envious.parse("#\nKEY=value") == {:ok, %{"KEY" => "value"}}
+  end
+
+  test "comment as first line" do
+    assert Envious.parse("# First line comment\nKEY=value") == {:ok, %{"KEY" => "value"}}
+  end
+
+  test "multiple consecutive comment lines" do
+    file = """
+    # Comment 1
+    # Comment 2
+    # Comment 3
+    KEY=value
+    """
+
+    assert Envious.parse(file) == {:ok, %{"KEY" => "value"}}
+  end
+
+  test "hash in quoted value is not a comment" do
+    assert Envious.parse("KEY=\"value#notcomment\"") == {:ok, %{"KEY" => "value#notcomment"}}
+  end
+
+  test "hash in single-quoted value is not a comment" do
+    assert Envious.parse("KEY='value#notcomment'") == {:ok, %{"KEY" => "value#notcomment"}}
+  end
+
+  test "comment with special characters" do
+    assert Envious.parse("# Comment with @#$%^&*()\nKEY=value") == {:ok, %{"KEY" => "value"}}
+  end
+
+  # Line ending variations
+  test "windows line endings" do
+    assert Envious.parse("FOO=bar\r\nBAZ=qux\r\n") == {:ok, %{"FOO" => "bar", "BAZ" => "qux"}}
+  end
+
+  test "mixed unix and windows line endings" do
+    assert Envious.parse("FOO=bar\nBAZ=qux\r\nQUX=foo") ==
+             {:ok, %{"FOO" => "bar", "BAZ" => "qux", "QUX" => "foo"}}
+  end
+
+  test "no trailing newline on last line" do
+    assert Envious.parse("FOO=bar\nBAZ=qux") == {:ok, %{"FOO" => "bar", "BAZ" => "qux"}}
+  end
+
+  test "carriage return only" do
+    assert Envious.parse("FOO=bar\rBAZ=qux") == {:ok, %{"FOO" => "bar", "BAZ" => "qux"}}
+  end
+
+  # Complex scenarios
+  test "mix of exports, comments, quoted and unquoted values" do
+    file = """
+    # Database configuration
+    export DB_HOST=localhost
+    DB_PORT=5432
+    DB_NAME="my database"
+
+    # API settings
+    API_KEY='secret-key-123'
+    API_URL=https://api.example.com
+    """
+
+    assert Envious.parse(file) ==
+             {:ok,
+              %{
+                "DB_HOST" => "localhost",
+                "DB_PORT" => "5432",
+                "DB_NAME" => "my database",
+                "API_KEY" => "secret-key-123",
+                "API_URL" => "https://api.example.com"
+              }}
+  end
+
+  test "unicode BOM at start of file" do
+    # UTF-8 BOM is U+FEFF
+    assert Envious.parse("\uFEFFKEY=value") == {:ok, %{"KEY" => "value"}}
+  end
+
+  test "multiple equals in quoted value" do
+    assert Envious.parse("MATH=\"2+2=4 and 3+3=6\"") == {:ok, %{"MATH" => "2+2=4 and 3+3=6"}}
+  end
+
+  test "extremely long value" do
+    long_value = String.duplicate("a", 10000)
+    assert Envious.parse("KEY=#{long_value}") == {:ok, %{"KEY" => long_value}}
+  end
+
+  test "many key-value pairs" do
+    pairs =
+      Enum.map(1..100, fn i -> "KEY#{i}=value#{i}" end)
+      |> Enum.join("\n")
+
+    expected =
+      Enum.map(1..100, fn i -> {"KEY#{i}", "value#{i}"} end)
+      |> Map.new()
+
+    assert Envious.parse(pairs) == {:ok, expected}
   end
 end

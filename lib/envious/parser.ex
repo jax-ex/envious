@@ -86,9 +86,12 @@ defmodule Envious.Parser do
     |> repeat_while(any_unicode, {:not_line_terminator, []})
 
   # Variable name: must start with letter or underscore, can contain letters, digits, underscores
-  # Examples: FOO, API_KEY, database_url
+  # Per POSIX shell syntax: [a-zA-Z_][a-zA-Z0-9_]*
+  # Examples: FOO, API_KEY, database_url, KEY1, DB2_HOST
   var_name =
-    utf8_string([?A..?Z, ?a..?z, ?_], min: 1)
+    utf8_char([?A..?Z, ?a..?z, ?_])
+    |> concat(times(utf8_char([?A..?Z, ?a..?z, ?0..?9, ?_]), min: 0))
+    |> reduce({List, :to_string, []})
 
   # Double quote character
   double_quote = ascii_char([?"])
@@ -242,13 +245,20 @@ defmodule Envious.Parser do
   # 2. Repeatedly parse either:
   #    - A key-value pair (contributes to result as a tuple)
   #    - A comment line (ignored)
+  #    Then ignore any trailing whitespace/newlines after each entry
+  #
+  # This allows blank lines between entries and trailing whitespace in the file.
   #
   # Returns: {:ok, [{key1, value1}, {key2, value2}, ...], remaining, context, position, offset}
   #
   # Each key-value pair is returned as a tuple, making the structure self-documenting
   # and allowing the Envious module to use Map.new/1 directly.
   defparsec :parse,
-            ignore(times(ignored, min: 0)) |> repeat(choice([key_value, ignore(comment_line)]))
+            ignore(times(ignored, min: 0))
+            |> repeat(
+              choice([key_value, ignore(comment_line)])
+              |> ignore(times(ignored, min: 0))
+            )
 
   ## Helper Functions
 
