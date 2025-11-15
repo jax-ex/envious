@@ -96,37 +96,75 @@ defmodule Envious.Parser do
   # Single quote character
   single_quote = ascii_char([?'])
 
-  # Characters allowed inside double-quoted strings (everything except double-quote and newline)
-  double_quoted_char =
+  # Escape sequence: backslash followed by any character
+  # This allows \n, \t, \", \\, etc.
+  escape_sequence =
+    string("\\")
+    |> utf8_char([])
+
+  # Regular character inside double-quoted strings (not backslash, not double-quote)
+  double_quoted_regular_char =
     utf8_char([
-      # All printable ASCII except double-quote and newlines
+      # Tab and newline
+      0x09, 0x0A,
+      # Carriage return
+      0x0D,
+      # Space through exclamation (!), excluding double-quote (") and backslash (\)
       ?\s..?!,
-      ?#..?~
+      # Hash (#) through open-bracket ([), excluding backslash (\\)
+      ?#..?[,
+      # Close-bracket (]) through tilde (~)
+      ?]..?~
     ])
 
-  # Characters allowed inside single-quoted strings (everything except single-quote and newline)
-  single_quoted_char =
+  # Regular character inside single-quoted strings (not backslash, not single-quote)
+  single_quoted_regular_char =
     utf8_char([
-      # All printable ASCII except single-quote and newlines
+      # Tab and newline
+      0x09, 0x0A,
+      # Carriage return
+      0x0D,
+      # Space through ampersand (&), excluding single-quote (') and backslash (\)
       ?\s..?&,
-      ?(..?~
+      # Open-paren (() through open-bracket ([), excluding backslash (\\)
+      ?(..?[,
+      # Close-bracket (]) through tilde (~)
+      ?]..?~
+    ])
+
+  # Content inside double quotes: either escape sequences or regular characters
+  double_quoted_content =
+    choice([
+      escape_sequence,
+      double_quoted_regular_char
+    ])
+
+  # Content inside single quotes: either escape sequences or regular characters
+  single_quoted_content =
+    choice([
+      escape_sequence,
+      single_quoted_regular_char
     ])
 
   # Double-quoted value: "value with spaces"
-  # Everything between the quotes is captured, no trimming
+  # - Handles escape sequences and regular characters
+  # - Post-processes to convert escape sequences to actual characters
   double_quoted_value =
     ignore(double_quote)
-    |> times(double_quoted_char, min: 0)
+    |> times(double_quoted_content, min: 0)
     |> ignore(double_quote)
     |> reduce({List, :to_string, []})
+    |> post_traverse(:process_escape_sequences)
 
   # Single-quoted value: 'value with spaces'
-  # Everything between the quotes is captured, no trimming
+  # - Handles escape sequences and regular characters
+  # - Post-processes to convert escape sequences to actual characters
   single_quoted_value =
     ignore(single_quote)
-    |> times(single_quoted_char, min: 0)
+    |> times(single_quoted_content, min: 0)
     |> ignore(single_quote)
     |> reduce({List, :to_string, []})
+    |> post_traverse(:process_escape_sequences)
 
   # Value characters for unquoted values: Accept most printable ASCII except:
   # - Newline (\n) and carriage return (\r) - these end the value
@@ -270,6 +308,46 @@ defmodule Envious.Parser do
 
   # Fallback clause for to_tuple when accumulator doesn't match expected pattern
   defp to_tuple(rest, acc, context, _line, _offset) do
+    {rest, acc, context}
+  end
+
+  # Post-traversal callback to process escape sequences in quoted strings
+  #
+  # Converts escape sequences like \n, \t, \\, \", \' into their actual characters.
+  #
+  # Parameters:
+  # - rest: Remaining input after parsing
+  # - [value]: The parsed quoted string value
+  # - context: Parser context
+  # - _line, _offset: Position information (unused)
+  #
+  # Returns: {rest, [processed_value], context}
+  #
+  # Supported escape sequences:
+  # - \n → newline (LF)
+  # - \t → tab
+  # - \r → carriage return (CR)
+  # - \\ → backslash
+  # - \" → double quote
+  # - \' → single quote
+  defp process_escape_sequences(rest, [value], context, _line, _offset) when is_binary(value) do
+    # Process escape sequences
+    # IMPORTANT: Process \\ first, before other escapes, to avoid double-processing
+    processed =
+      value
+      |> String.replace("\\\\", <<0>>) # Temporarily replace \\ with null byte
+      |> String.replace("\\n", "\n")
+      |> String.replace("\\t", "\t")
+      |> String.replace("\\r", "\r")
+      |> String.replace("\\\"", "\"")
+      |> String.replace("\\'", "'")
+      |> String.replace(<<0>>, "\\")   # Replace null byte back to single backslash
+
+    {rest, [processed], context}
+  end
+
+  # Fallback clause for process_escape_sequences
+  defp process_escape_sequences(rest, acc, context, _line, _offset) do
     {rest, acc, context}
   end
 end

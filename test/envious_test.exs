@@ -100,6 +100,65 @@ defmodule EnviousTest do
              {:ok, %{"EMPTY" => "", "KEY" => "value"}}
   end
 
+  # Escape sequence tests
+  test "newline escape sequence in double quotes" do
+    assert Envious.parse("MESSAGE=\"Line 1\\nLine 2\"") ==
+             {:ok, %{"MESSAGE" => "Line 1\nLine 2"}}
+  end
+
+  test "tab escape sequence in double quotes" do
+    assert Envious.parse("DATA=\"Column1\\tColumn2\"") ==
+             {:ok, %{"DATA" => "Column1\tColumn2"}}
+  end
+
+  test "carriage return escape sequence" do
+    assert Envious.parse("TEXT=\"Line1\\rLine2\"") ==
+             {:ok, %{"TEXT" => "Line1\rLine2"}}
+  end
+
+  test "escaped backslash in double quotes" do
+    assert Envious.parse("PATH=\"C:\\\\Users\\\\path\"") ==
+             {:ok, %{"PATH" => "C:\\Users\\path"}}
+  end
+
+  test "escaped double quote in double quotes" do
+    assert Envious.parse("QUOTE=\"She said \\\"hello\\\"\"") ==
+             {:ok, %{"QUOTE" => "She said \"hello\""}}
+  end
+
+  test "escaped single quote in single quotes" do
+    assert Envious.parse("QUOTE='It\\'s working'") ==
+             {:ok, %{"QUOTE" => "It's working"}}
+  end
+
+  test "multiple escape sequences" do
+    assert Envious.parse("DATA=\"Name:\\tJohn\\nAge:\\t30\"") ==
+             {:ok, %{"DATA" => "Name:\tJohn\nAge:\t30"}}
+  end
+
+  # Multi-line value tests
+  test "multi-line value with literal newline in double quotes" do
+    file = """
+    CERT="-----BEGIN CERTIFICATE-----
+    MIIBkTCB+w
+    -----END CERTIFICATE-----"
+    """
+
+    assert {:ok, result} = Envious.parse(file)
+    assert result["CERT"] == "-----BEGIN CERTIFICATE-----\nMIIBkTCB+w\n-----END CERTIFICATE-----"
+  end
+
+  test "multi-line value with literal newline in single quotes" do
+    file = """
+    DATA='Line 1
+    Line 2
+    Line 3'
+    """
+
+    assert {:ok, result} = Envious.parse(file)
+    assert result["DATA"] == "Line 1\nLine 2\nLine 3"
+  end
+
   # Error handling tests
   test "unclosed double quote returns error" do
     assert {:error, message} = Envious.parse("KEY=\"unclosed")

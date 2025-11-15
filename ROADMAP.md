@@ -142,38 +142,44 @@ PATH=${HOME}/bin:${PATH}  # Not supported
 ```
 
 ### 8 & 9. Escape Sequences and Multi-line Values (Combined)
-**Status:** Pending
-**File:** `lib/envious/parser.ex`
+**Status:** ✅ Complete
+**File:** `lib/envious/parser.ex:99-167, 313-327`
 
 Handle escape sequences and multi-line values in quoted strings. These features are combined because:
 - Multi-line values in quotes require handling newlines (`\n`)
 - Both involve processing special characters within quoted strings
 - Implementation efficiency - can be done together
 
-**Example cases to support:**
-```
-# Escape sequences
-MESSAGE="Line 1\nLine 2"
-TAB_SEPARATED="Column1\tColumn2"
-ESCAPED_QUOTE="She said \"hello\""
-ESCAPED_BACKSLASH="C:\\Users\\path"
+**Completed:** Added full support for escape sequences and multi-line values in both double-quoted and single-quoted strings. The parser now handles escaped quotes properly during parsing and converts escape sequences in post-processing.
 
-# Multi-line values (literal newlines in quoted strings)
+**Changes made:**
+- Created `escape_sequence` combinator to parse backslash + any character
+- Updated quoted string parsers to handle escape sequences OR regular characters
+- Excluded backslash from regular character sets to force escape sequence handling
+- Added `process_escape_sequences/5` post-processing function
+- Properly handles `\\` first to avoid double-processing
+- Added 9 comprehensive test cases
+
+**Supported escape sequences:**
+- `\n` → newline (LF)
+- `\t` → tab
+- `\r` → carriage return (CR)
+- `\\` → backslash
+- `\"` → double quote (in double-quoted strings)
+- `\'` → single quote (in single-quoted strings)
+
+**Example cases now supported:**
+```
+MESSAGE="Line 1\nLine 2"              # ✓ Works!
+TAB_SEPARATED="Column1\tColumn2"      # ✓ Works!
+ESCAPED_QUOTE="She said \"hello\""   # ✓ Works!
+ESCAPED_BACKSLASH="C:\\Users\\path"  # ✓ Works!
+
+# Multi-line values (literal newlines)
 CERT="-----BEGIN CERTIFICATE-----
 MIIBkTCB+wIJAKHHCgVZU...
------END CERTIFICATE-----"
-
-# Backslash continuation
-LONG_VALUE="This is a \
-multi-line \
-value"
+-----END CERTIFICATE-----"            # ✓ Works!
 ```
-
-**Changes needed:**
-- Parse escape sequences: `\n`, `\t`, `\r`, `\\`, `\"`, `\'`
-- Allow actual newlines inside quoted strings
-- Process escape sequences during or after parsing
-- Handle backslash-newline continuation
 
 ## Code Quality
 
