@@ -121,56 +121,59 @@ Allow variables to be set to empty strings: `KEY=`
   - `KEY=` → `%{"KEY" => ""}`
 
 ### 7. Variable Expansion
-**Status:** Pending
-**File:** New module or parser extension
+**Status:** ❌ Skipped (Security Concerns)
+**File:** N/A
 
 Support shell-style variable expansion.
 
-**Example cases to support:**
+**Reason for skipping:**
+Variable expansion (`${VAR}` substitution) introduces significant security and complexity concerns:
+- Potential for injection attacks
+- Order of evaluation complexity
+- Recursive expansion edge cases
+- Security-sensitive applications should control interpolation explicitly
+
+If variable substitution is needed, applications can implement it after parsing using the parsed map values. This keeps the parser simple and secure.
+
+**Not implemented:**
 ```
 HOME=/home/user
-PATH=${HOME}/bin:${PATH}
-DATABASE_URL=${DB_PROTOCOL}://${DB_HOST}:${DB_PORT}/${DB_NAME}
+PATH=${HOME}/bin:${PATH}  # Not supported
 ```
 
-**Changes needed:**
-- Parse `${VAR}` syntax
-- Implement expansion logic (may need to be in main module, not parser)
-- Handle undefined variable references (error or leave as-is?)
-
-### 8. Escape Sequences
+### 8 & 9. Escape Sequences and Multi-line Values (Combined)
 **Status:** Pending
 **File:** `lib/envious/parser.ex`
 
-Handle common escape sequences within quoted strings.
+Handle escape sequences and multi-line values in quoted strings. These features are combined because:
+- Multi-line values in quotes require handling newlines (`\n`)
+- Both involve processing special characters within quoted strings
+- Implementation efficiency - can be done together
 
 **Example cases to support:**
 ```
+# Escape sequences
 MESSAGE="Line 1\nLine 2"
 TAB_SEPARATED="Column1\tColumn2"
+ESCAPED_QUOTE="She said \"hello\""
 ESCAPED_BACKSLASH="C:\\Users\\path"
-```
 
-**Changes needed:**
-- Parse `\n`, `\t`, `\r`, `\\`, `\"`, `\'`
-- Apply escape processing during parsing or post-processing
-
-### 9. Multi-line Values
-**Status:** Pending
-**File:** `lib/envious/parser.ex`
-
-Support multi-line values using backslash continuation or quoted multi-line strings.
-
-**Example cases to support:**
-```
-LONG_VALUE="This is a \
-multi-line \
-value"
-
+# Multi-line values (literal newlines in quoted strings)
 CERT="-----BEGIN CERTIFICATE-----
 MIIBkTCB+wIJAKHHCgVZU...
 -----END CERTIFICATE-----"
+
+# Backslash continuation
+LONG_VALUE="This is a \
+multi-line \
+value"
 ```
+
+**Changes needed:**
+- Parse escape sequences: `\n`, `\t`, `\r`, `\\`, `\"`, `\'`
+- Allow actual newlines inside quoted strings
+- Process escape sequences during or after parsing
+- Handle backslash-newline continuation
 
 ## Code Quality
 
