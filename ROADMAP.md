@@ -80,15 +80,27 @@ FOO=bar # comment               # Still works!
 **Note:** Escape sequences (like `\"` inside quotes) will be handled in item #8.
 
 ### 5. Better Error Handling
-**Status:** Pending
-**File:** `lib/envious.ex`
+**Status:** ✅ Complete
+**File:** `lib/envious.ex:41-58`
 
 Currently returns raw NimbleParsec tuple. Should provide user-friendly error messages.
 
-**Changes needed:**
-- Parse successful returns: `{:ok, map}`
-- Parse failures return: `{:error, "descriptive message"}`
-- Include line/column information in error messages
+**Completed:** Added comprehensive error handling that detects unparsed input and returns helpful error messages with line/column information.
+
+**Changes made:**
+- Success with all input consumed: returns `{:ok, map}`
+- Unparsed input remaining: returns `{:error, "Parse error at line X, column Y: could not parse..."}`
+- Includes preview of problematic input in error message
+- Added 6 test cases for error scenarios
+
+**Example error messages:**
+```elixir
+Envious.parse("KEY=\"unclosed")
+# => {:error, "Parse error at line 1, column 0: could not parse remaining input starting with: \"KEY=\\\"unclosed\""}
+
+Envious.parse("KEY=value\nINVALID")
+# => {:error, "Parse error at line 2, column 10: could not parse remaining input starting with: \"INVALID\""}
+```
 
 ## Medium Priority
 

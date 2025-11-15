@@ -209,7 +209,8 @@ defmodule Envious.Parser do
   #
   # Each key-value pair is returned as a tuple, making the structure self-documenting
   # and allowing the Envious module to use Map.new/1 directly.
-  defparsec :parse, ignore(times(ignored, min: 0)) |> repeat(choice([key_value, ignore(comment_line)]))
+  defparsec :parse,
+            ignore(times(ignored, min: 0)) |> repeat(choice([key_value, ignore(comment_line)]))
 
   ## Helper Functions
 

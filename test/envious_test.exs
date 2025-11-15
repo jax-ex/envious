@@ -89,4 +89,35 @@ defmodule EnviousTest do
     assert Envious.parse("EMPTY=''") ==
              {:ok, %{"EMPTY" => ""}}
   end
+
+  # Error handling tests
+  test "unclosed double quote returns error" do
+    assert {:error, message} = Envious.parse("KEY=\"unclosed")
+    assert message =~ "line 1"
+    assert message =~ "could not parse"
+  end
+
+  test "unclosed single quote returns error" do
+    assert {:error, message} = Envious.parse("KEY='unclosed")
+    assert message =~ "line 1"
+    assert message =~ "could not parse"
+  end
+
+  test "invalid syntax returns error" do
+    assert {:error, message} = Envious.parse("INVALID WITHOUT EQUALS")
+    assert message =~ "line 1"
+  end
+
+  test "partial valid with trailing invalid returns error" do
+    assert {:error, message} = Envious.parse("KEY=value\nINVALID")
+    assert message =~ "line 2"
+  end
+
+  test "empty string parses successfully" do
+    assert Envious.parse("") == {:ok, %{}}
+  end
+
+  test "only comments parses successfully" do
+    assert Envious.parse("# comment\n# another") == {:ok, %{}}
+  end
 end

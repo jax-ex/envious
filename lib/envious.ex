@@ -23,10 +23,9 @@ defmodule Envious do
   @doc """
   Parse a .env file string into a map.
 
-  Returns `{:ok, map}` where map contains the parsed key-value pairs.
-
-  The parser returns the raw NimbleParsec result tuple on error,
-  which can be pattern matched for debugging.
+  Returns:
+  - `{:ok, map}` on success, where map contains the parsed key-value pairs
+  - `{:error, message}` on failure, with a descriptive error message including line/column info
 
   ## Examples
 
@@ -35,11 +34,29 @@ defmodule Envious do
 
       iex> Envious.parse("export API_KEY=secret\\nDATABASE_URL=postgres://localhost")
       {:ok, %{"API_KEY" => "secret", "DATABASE_URL" => "postgres://localhost"}}
+
+      iex> Envious.parse("KEY=\\"unclosed")
+      {:error, "Parse error at line 1, column 5: could not parse remaining input"}
   """
   def parse(str) do
-    with {:ok, parsed, _remaining, _context, _line, _offset} <- Parser.parse(str) do
-      # Parser returns a list of {key, value} tuples, which Map.new/1 handles directly
-      {:ok, Map.new(parsed)}
+    case Parser.parse(str) do
+      # Success with all input consumed
+      {:ok, parsed, "", _context, _line, _offset} ->
+        {:ok, Map.new(parsed)}
+
+      # Success but with remaining unparsed input - this is an error
+      {:ok, _parsed, remaining, _context, {line, col}, _offset} when remaining != "" ->
+        preview = remaining |> String.slice(0, 20) |> String.trim()
+
+        preview_text =
+          if String.length(preview) < String.length(remaining), do: "#{preview}...", else: preview
+
+        {:error,
+         "Parse error at line #{line}, column #{col}: could not parse remaining input starting with: #{inspect(preview_text)}"}
+
+      # Actual parse error from NimbleParsec (rare)
+      {:error, message, _remaining, _context, {line, col}, _offset} ->
+        {:error, "Parse error at line #{line}, column #{col}: #{message}"}
     end
   end
 end
