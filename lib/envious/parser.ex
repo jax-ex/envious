@@ -148,11 +148,11 @@ defmodule Envious.Parser do
     ])
 
   # Unquoted value: traditional unquoted values
-  # - Collect 1 or more value characters
+  # - Collect 0 or more value characters (allows empty values like KEY=)
   # - Convert the character list to a string
   # - Trim whitespace from both ends (handles inline comments: "value # comment")
   unquoted_value =
-    times(unquoted_value_char, min: 1)
+    times(unquoted_value_char, min: 0)
     |> reduce({List, :to_string, []})
     |> post_traverse(:trim_value)
 

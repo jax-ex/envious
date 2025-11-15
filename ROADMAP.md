@@ -105,12 +105,20 @@ Envious.parse("KEY=value\nINVALID")
 ## Medium Priority
 
 ### 6. Support for Empty Values
-**Status:** Pending
-**File:** `lib/envious/parser.ex`
+**Status:** ✅ Complete
+**File:** `lib/envious/parser.ex:154-157`
 
 Allow variables to be set to empty strings: `KEY=`
 
-**Note:** This overlaps with item #1 but deserves explicit testing and handling.
+**Completed:** Updated unquoted value parser to accept 0 or more characters (changed `min: 1` to `min: 0`). Empty values now parse to empty strings, consistent with quoted empty values.
+
+**Changes made:**
+- Changed `unquoted_value` parser to allow `min: 0` characters
+- Added 2 test cases for empty unquoted values
+- All three empty value syntaxes now work:
+  - `KEY=""` → `%{"KEY" => ""}`
+  - `KEY=''` → `%{"KEY" => ""}`
+  - `KEY=` → `%{"KEY" => ""}`
 
 ### 7. Variable Expansion
 **Status:** Pending

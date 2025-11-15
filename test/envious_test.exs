@@ -90,6 +90,16 @@ defmodule EnviousTest do
              {:ok, %{"EMPTY" => ""}}
   end
 
+  test "empty unquoted value" do
+    assert Envious.parse("EMPTY=") ==
+             {:ok, %{"EMPTY" => ""}}
+  end
+
+  test "empty unquoted value with newline" do
+    assert Envious.parse("EMPTY=\nKEY=value") ==
+             {:ok, %{"EMPTY" => "", "KEY" => "value"}}
+  end
+
   # Error handling tests
   test "unclosed double quote returns error" do
     assert {:error, message} = Envious.parse("KEY=\"unclosed")
