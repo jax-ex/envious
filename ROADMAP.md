@@ -27,15 +27,18 @@ EMPTY_VALUE=
 ```
 
 ### 2. Create Proper Key-Value Pair Structure
-**Status:** Pending
-**Files:** `lib/envious/parser.ex`, `lib/envious.ex:7-10`
+**Status:** ✅ Complete
+**Files:** `lib/envious/parser.ex`, `lib/envious.ex`
 
 Currently, the parser creates a flat list `["KEY", "value"]` that gets chunked by 2 in the main module. This is fragile and error-prone.
 
-**Changes needed:**
-- Parse equals sign as part of the key-value structure (not globally ignored)
-- Return structured data: `[{"KEY", "value"}]` or similar
-- Make the parser enforce proper `KEY=value` syntax
+**Completed:** Parser now returns structured tuples `[{key, value}]` instead of flat list. The main module uses `Map.new/1` directly, eliminating fragile chunking logic. Added comprehensive documentation to both modules.
+
+**Changes made:**
+- Parser returns structured tuples: `[{"KEY", "value"}]`
+- Equals sign is part of key-value structure (not globally ignored)
+- Main module simplified to use `Map.new/1` instead of chunking
+- Added `to_tuple` post-traverse callback with proper handling of NimbleParsec's reverse accumulator order
 
 ### 3. Fix Export Handling
 **Status:** Pending

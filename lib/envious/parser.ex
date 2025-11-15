@@ -23,10 +23,10 @@ defmodule Envious.Parser do
   ## Example
 
       iex> Envious.Parser.parse("FOO=bar")
-      {:ok, ["FOO", "bar"], "", %{}, {1, 0}, 7}
+      {:ok, [{"FOO", "bar"}], "", %{}, {1, 0}, 7}
 
       iex> Envious.Parser.parse("export KEY=value\\n# comment\\nFOO=bar")
-      {:ok, ["KEY", "value", "FOO", "bar"], "", %{}, ...}
+      {:ok, [{"KEY", "value"}, {"FOO", "bar"}], "", %{}, ...}
   """
 
   import NimbleParsec
@@ -122,17 +122,19 @@ defmodule Envious.Parser do
   # 3. Ignore the equals sign
   # 4. Capture the value
   # 5. Ignore optional trailing newline
+  # 6. Convert [key, value] to {key, value} tuple
   #
   # Examples:
-  # - "KEY=value" -> ["KEY", "value"]
-  # - "export FOO=bar" -> ["FOO", "bar"]
-  # - "KEY=value # comment" -> ["KEY", "value"] (trimmed)
+  # - "KEY=value" -> {"KEY", "value"}
+  # - "export FOO=bar" -> {"FOO", "bar"}
+  # - "KEY=value # comment" -> {"KEY", "value"} (trimmed)
   key_value =
     optional(ignore(export))
     |> concat(var_name)
     |> ignore(equals)
     |> concat(val)
     |> ignore(optional(line_terminator))
+    |> post_traverse(:to_tuple)
 
   # Comment line parser: # comment text [newline]
   #
@@ -146,13 +148,13 @@ defmodule Envious.Parser do
   # Structure:
   # 1. Ignore any leading whitespace/newlines
   # 2. Repeatedly parse either:
-  #    - A key-value pair (contributes to result)
+  #    - A key-value pair (contributes to result as a tuple)
   #    - A comment line (ignored)
   #
-  # Returns: {:ok, [key1, value1, key2, value2, ...], remaining, context, position, offset}
+  # Returns: {:ok, [{key1, value1}, {key2, value2}, ...], remaining, context, position, offset}
   #
-  # The flat list of alternating keys and values is later chunked by 2 in the
-  # Envious module to create a map.
+  # Each key-value pair is returned as a tuple, making the structure self-documenting
+  # and allowing the Envious module to use Map.new/1 directly.
   defparsec :parse, ignore(times(ignored, min: 0)) |> repeat(choice([key_value, ignore(comment_line)]))
 
   ## Helper Functions
@@ -188,6 +190,31 @@ defmodule Envious.Parser do
 
   # Fallback clause for trim_value when accumulator doesn't match expected pattern
   defp trim_value(rest, acc, context, _line, _offset) do
+    {rest, acc, context}
+  end
+
+  # Post-traversal callback to convert [value, key] list to {key, value} tuple
+  #
+  # This creates a proper structured representation of key-value pairs
+  # instead of relying on a flat list that needs to be chunked later.
+  #
+  # Parameters:
+  # - rest: Remaining input after parsing
+  # - [value, key]: The parsed value and key from the accumulator
+  #                 (Note: NimbleParsec builds accumulators in reverse order)
+  # - context: Parser context
+  # - _line, _offset: Position information (unused)
+  #
+  # Returns: {rest, [{key, value}], context}
+  #
+  # This makes the parser output self-documenting and type-safe.
+  # The main Envious module can use Map.new/1 directly on the result.
+  defp to_tuple(rest, [value, key], context, _line, _offset) do
+    {rest, [{key, value}], context}
+  end
+
+  # Fallback clause for to_tuple when accumulator doesn't match expected pattern
+  defp to_tuple(rest, acc, context, _line, _offset) do
     {rest, acc, context}
   end
 end
