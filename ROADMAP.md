@@ -41,15 +41,17 @@ Currently, the parser creates a flat list `["KEY", "value"]` that gets chunked b
 - Added `to_tuple` post-traverse callback with proper handling of NimbleParsec's reverse accumulator order
 
 ### 3. Fix Export Handling
-**Status:** Pending
-**File:** `lib/envious/parser.ex:44-48`
+**Status:** ✅ Complete (fixed in items #1 and #2)
+**File:** `lib/envious/parser.ex:131-137`
 
 The current `var_name` parser has confusing logic with the bare `repeat()` on line 47, and export handling needs to be truly optional.
 
-**Changes needed:**
-- Make `export` prefix optional for all variable declarations
-- Clean up the confusing `repeat()` combinator
-- Ensure both `export KEY=value` and `KEY=value` work correctly
+**Completed:** Export handling is now clean and optional via `optional(ignore(export))` in the key_value combinator. The confusing `repeat()` has been removed. Both `export KEY=value` and `KEY=value` work correctly.
+
+**Changes made:**
+- Export prefix is now optional via `optional(ignore(export))`
+- Removed confusing `repeat()` combinator
+- Both syntaxes work correctly (verified by tests)
 
 ### 4. Support Quoted Values
 **Status:** Pending
