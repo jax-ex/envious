@@ -4,12 +4,13 @@ defmodule Envious.MixProject do
   def project do
     [
       app: :envious,
-      version: "1.0.0",
+      version: "1.0.1",
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: description(),
       package: package(),
+      docs: docs(),
       name: "envious",
       source_url: "https://github.com/jax-ex/envious"
     ]
@@ -40,6 +41,13 @@ defmodule Envious.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/jax-ex/envious"}
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      extras: ["README.md"]
     ]
   end
 end
