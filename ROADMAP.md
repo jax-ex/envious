@@ -54,22 +54,30 @@ The current `var_name` parser has confusing logic with the bare `repeat()` on li
 - Both syntaxes work correctly (verified by tests)
 
 ### 4. Support Quoted Values
-**Status:** Pending
-**File:** `lib/envious/parser.ex`
+**Status:** ✅ Complete
+**File:** `lib/envious/parser.ex:93-169`
 
 .env files commonly use quotes to preserve spaces and special characters.
 
-**Changes needed:**
-- Support double-quoted values: `KEY="value with spaces"`
-- Support single-quoted values: `KEY='value with spaces'`
-- Handle escaped quotes within quoted strings
+**Completed:** Added support for both double-quoted and single-quoted values. Values can now contain spaces and special characters when wrapped in quotes. Empty quoted values are also supported.
 
-**Example cases to support:**
+**Changes made:**
+- Added `double_quoted_value` parser for `"value with spaces"`
+- Added `single_quoted_value` parser for `'value with spaces'`
+- Updated `val` to choose between quoted and unquoted values
+- Preserved backward compatibility - unquoted values still work
+- Inline comments still work with unquoted values
+
+**Example cases supported:**
 ```
-MESSAGE="Hello World"
-PATH='/usr/local/bin:/usr/bin'
-QUOTE="She said \"hello\""
+MESSAGE="Hello World"           # Works!
+PATH='/usr/local/bin:/usr/bin'  # Works!
+EMPTY=""                        # Works!
+PORT=3000                       # Still works!
+FOO=bar # comment               # Still works!
 ```
+
+**Note:** Escape sequences (like `\"` inside quotes) will be handled in item #8.
 
 ### 5. Better Error Handling
 **Status:** Pending

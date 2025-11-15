@@ -90,29 +90,83 @@ defmodule Envious.Parser do
   var_name =
     utf8_string([?A..?Z, ?a..?z, ?_], min: 1)
 
-  # Value characters: Accept most printable ASCII except:
-  # - Newline (\n) and carriage return (\r) - these end the value
-  # - Hash (#) - this starts an inline comment
-  #
-  # Character ranges:
-  # - ?\s..?" is space (0x20) through double-quote (0x22), excluding # (0x23)
-  # - ?$..?~ is dollar (0x24) through tilde (0x7E), which includes A-Z, a-z, 0-9, and symbols
-  value_char =
+  # Double quote character
+  double_quote = ascii_char([?"])
+
+  # Single quote character
+  single_quote = ascii_char([?'])
+
+  # Characters allowed inside double-quoted strings (everything except double-quote and newline)
+  double_quoted_char =
     utf8_char([
-      # Space (32) through double-quote (34), which excludes hash (35)
-      ?\s..?",
-      # Dollar sign (36) through tilde (126) - includes all alphanumeric and symbols
-      ?$..?~
+      # All printable ASCII except double-quote and newlines
+      ?\s..?!,
+      ?#..?~
     ])
 
-  # Parse the value portion after the = sign
+  # Characters allowed inside single-quoted strings (everything except single-quote and newline)
+  single_quoted_char =
+    utf8_char([
+      # All printable ASCII except single-quote and newlines
+      ?\s..?&,
+      ?(..?~
+    ])
+
+  # Double-quoted value: "value with spaces"
+  # Everything between the quotes is captured, no trimming
+  double_quoted_value =
+    ignore(double_quote)
+    |> times(double_quoted_char, min: 0)
+    |> ignore(double_quote)
+    |> reduce({List, :to_string, []})
+
+  # Single-quoted value: 'value with spaces'
+  # Everything between the quotes is captured, no trimming
+  single_quoted_value =
+    ignore(single_quote)
+    |> times(single_quoted_char, min: 0)
+    |> ignore(single_quote)
+    |> reduce({List, :to_string, []})
+
+  # Value characters for unquoted values: Accept most printable ASCII except:
+  # - Newline (\n) and carriage return (\r) - these end the value
+  # - Hash (#) - this starts an inline comment
+  # - Quotes (" and ') - these start quoted values
+  #
+  # Character ranges:
+  # - ?\s..?! is space (0x20) through exclamation (0x21), excluding double-quote (0x22)
+  # - ?$..?& is dollar through ampersand, excluding hash (0x23) and single-quote (0x27)
+  # - ?(..?~ is open-paren through tilde - includes alphanumeric and symbols
+  unquoted_value_char =
+    utf8_char([
+      # Space (32) through exclamation (33), which excludes double-quote (34)
+      ?\s..?!,
+      # Dollar (36) through ampersand (38), which excludes hash (35) and single-quote (39)
+      ?$..?&,
+      # Open-paren (40) through tilde (126) - includes all alphanumeric and symbols
+      ?(..?~
+    ])
+
+  # Unquoted value: traditional unquoted values
   # - Collect 1 or more value characters
   # - Convert the character list to a string
   # - Trim whitespace from both ends (handles inline comments: "value # comment")
-  val =
-    times(value_char, min: 1)
+  unquoted_value =
+    times(unquoted_value_char, min: 1)
     |> reduce({List, :to_string, []})
     |> post_traverse(:trim_value)
+
+  # Parse the value portion after the = sign
+  # Values can be:
+  # - Double-quoted: "value with spaces"
+  # - Single-quoted: 'value with spaces'
+  # - Unquoted: value (must not contain spaces, quotes, or hash)
+  val =
+    choice([
+      double_quoted_value,
+      single_quoted_value,
+      unquoted_value
+    ])
 
   # Key-value pair parser: [export] KEY=VALUE[newline]
   #

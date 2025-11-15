@@ -59,4 +59,34 @@ defmodule EnviousTest do
     assert Envious.parse("VERSION=1.2.3-beta_1") ==
              {:ok, %{"VERSION" => "1.2.3-beta_1"}}
   end
+
+  test "double-quoted value with spaces" do
+    assert Envious.parse("MESSAGE=\"Hello World\"") ==
+             {:ok, %{"MESSAGE" => "Hello World"}}
+  end
+
+  test "single-quoted value with spaces" do
+    assert Envious.parse("MESSAGE='Hello World'") ==
+             {:ok, %{"MESSAGE" => "Hello World"}}
+  end
+
+  test "double-quoted value with special chars" do
+    assert Envious.parse("PATH=\"/usr/local/bin:/usr/bin\"") ==
+             {:ok, %{"PATH" => "/usr/local/bin:/usr/bin"}}
+  end
+
+  test "single-quoted value with special chars" do
+    assert Envious.parse("PATH='/usr/local/bin:/usr/bin'") ==
+             {:ok, %{"PATH" => "/usr/local/bin:/usr/bin"}}
+  end
+
+  test "empty double-quoted value" do
+    assert Envious.parse("EMPTY=\"\"") ==
+             {:ok, %{"EMPTY" => ""}}
+  end
+
+  test "empty single-quoted value" do
+    assert Envious.parse("EMPTY=''") ==
+             {:ok, %{"EMPTY" => ""}}
+  end
 end
