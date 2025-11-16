@@ -217,6 +217,27 @@ defmodule EnviousTest do
     assert Envious.parse("# comment\n# another") == {:ok, %{}}
   end
 
+  # parse!/1 tests
+  test "parse! returns map on success" do
+    assert Envious.parse!("KEY=value") == %{"KEY" => "value"}
+  end
+
+  test "parse! with multiple entries" do
+    assert Envious.parse!("FOO=bar\nBAZ=qux") == %{"FOO" => "bar", "BAZ" => "qux"}
+  end
+
+  test "parse! raises on invalid input" do
+    assert_raise RuntimeError, ~r/Parse error at line 1/, fn ->
+      Envious.parse!("INVALID")
+    end
+  end
+
+  test "parse! raises on unclosed quote" do
+    assert_raise RuntimeError, ~r/Parse error at line 1/, fn ->
+      Envious.parse!("KEY=\"unclosed")
+    end
+  end
+
   # Whitespace edge cases
   test "leading whitespace in file" do
     assert Envious.parse("  \n\t\nKEY=value") == {:ok, %{"KEY" => "value"}}

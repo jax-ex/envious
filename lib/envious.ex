@@ -59,4 +59,27 @@ defmodule Envious do
         {:error, "Parse error at line #{line}, column #{col}: #{message}"}
     end
   end
+
+  @doc """
+  Parse a .env file string into a map, raising on error.
+
+  Same as `parse/1` but raises a `RuntimeError` if the input cannot be parsed.
+
+  ## Examples
+
+      iex> Envious.parse!("PORT=3000")
+      %{"PORT" => "3000"}
+
+      iex> Envious.parse!("export API_KEY=secret\\nDATABASE_URL=postgres://localhost")
+      %{"API_KEY" => "secret", "DATABASE_URL" => "postgres://localhost"}
+
+      iex> Envious.parse!("INVALID")
+      ** (RuntimeError) Parse error at line 1, column 0: could not parse remaining input starting with: "INVALID"
+  """
+  def parse!(str) do
+    case parse(str) do
+      {:ok, map} -> map
+      {:error, message} -> raise message
+    end
+  end
 end
