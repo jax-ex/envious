@@ -109,9 +109,9 @@ defmodule Envious.Parser do
   double_quoted_regular_char =
     utf8_char([
       # Tab and newline
-      0x09, 0x0A,
+      @horizontal_tab, @newline,
       # Carriage return
-      0x0D,
+      @carriage_return,
       # Space through exclamation (!), excluding double-quote (") and backslash (\)
       ?\s..?!,
       # Hash (#) through open-bracket ([), excluding backslash (\\)
@@ -124,9 +124,9 @@ defmodule Envious.Parser do
   single_quoted_regular_char =
     utf8_char([
       # Tab and newline
-      0x09, 0x0A,
+      @horizontal_tab, @newline,
       # Carriage return
-      0x0D,
+      @carriage_return,
       # Space through ampersand (&), excluding single-quote (') and backslash (\)
       ?\s..?&,
       # Open-paren (() through open-bracket ([), excluding backslash (\\)
