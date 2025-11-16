@@ -341,23 +341,35 @@ defmodule Envious.Parser do
   # - \" → double quote
   # - \' → single quote
   defp process_escape_sequences(rest, [value], context, _line, _offset) when is_binary(value) do
-    # Process escape sequences
-    # IMPORTANT: Process \\ first, before other escapes, to avoid double-processing
-    processed =
-      value
-      |> String.replace("\\\\", <<0>>) # Temporarily replace \\ with null byte
-      |> String.replace("\\n", "\n")
-      |> String.replace("\\t", "\t")
-      |> String.replace("\\r", "\r")
-      |> String.replace("\\\"", "\"")
-      |> String.replace("\\'", "'")
-      |> String.replace(<<0>>, "\\")   # Replace null byte back to single backslash
-
+    # Process escape sequences using recursive pattern matching with iolists for efficiency
+    processed = value |> process_escapes([]) |> IO.iodata_to_binary()
     {rest, [processed], context}
   end
 
   # Fallback clause for process_escape_sequences
   defp process_escape_sequences(rest, acc, context, _line, _offset) do
     {rest, acc, context}
+  end
+
+  # Recursively process escape sequences in a string
+  # Uses iolists for efficient string building - accumulates fragments in reverse order
+  # then converts to binary at the end
+
+  # Base case: empty string, reverse accumulator and return
+  defp process_escapes("", acc), do: Enum.reverse(acc)
+
+  # IMPORTANT: Process \\ first to avoid matching it as part of other escape sequences
+  defp process_escapes("\\\\" <> rest, acc), do: process_escapes(rest, ["\\" | acc])
+
+  # Escape sequences
+  defp process_escapes("\\n" <> rest, acc), do: process_escapes(rest, ["\n" | acc])
+  defp process_escapes("\\t" <> rest, acc), do: process_escapes(rest, ["\t" | acc])
+  defp process_escapes("\\r" <> rest, acc), do: process_escapes(rest, ["\r" | acc])
+  defp process_escapes("\\\"" <> rest, acc), do: process_escapes(rest, ["\"" | acc])
+  defp process_escapes("\\'" <> rest, acc), do: process_escapes(rest, ["'" | acc])
+
+  # Any other character (including non-escape backslash sequences or regular chars)
+  defp process_escapes(<<char::utf8, rest::binary>>, acc) do
+    process_escapes(rest, [<<char::utf8>> | acc])
   end
 end
