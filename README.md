@@ -169,6 +169,72 @@ config :my_app,
   secret_key_base: System.fetch_env!("SECRET_KEY_BASE")
 ```
 
+## Helpers
+
+Envious includes a `Envious.Helpers` module with convenient functions for extracting and converting environment variables in your configuration files. These helpers work with `System.get_env/1` and are designed to be used after loading your `.env` file.
+
+### Value Extraction Functions
+
+- **`optional/1`** - Returns value or `nil` if not set
+- **`optional/2`** - Returns value or default if not set
+- **`required!/1`** - Returns value or raises if not set
+
+### Type Conversion Functions (bang-only)
+
+- **`integer!/1`** - Convert to integer
+- **`float!/1`** - Convert to float
+- **`boolean!/1`** - Convert to boolean (handles "true", "1", "yes", "on" and their false equivalents)
+- **`atom!/1`** - Convert to existing atom (safe, won't create new atoms)
+- **`list!/1`** - Split into list (comma-separated by default)
+- **`list!/2`** - Split into list and transform each element
+- **`interval!/1`** - Parse time intervals ("30s", "5m", "2h") to milliseconds (default, like `:timer`)
+- **`interval!/2`** - Parse time intervals to custom unit (:seconds, :minutes, etc.)
+- **`uri!/1`** - Parse URI string
+
+### Usage Example
+
+```elixir
+# config/runtime.exs
+import Config
+import Envious.Helpers
+
+# Load .env file into system environment
+".env" |> File.read!() |> Envious.parse!() |> System.put_env()
+
+# Use helpers to extract and convert values
+config :my_app, MyApp.Repo,
+  url: required!("DATABASE_URL"),
+  pool_size: optional("POOL_SIZE", "10") |> integer!()
+
+config :my_app,
+  port: required!("PORT") |> integer!(),
+  host: optional("HOST", "localhost"),
+  debug: optional("DEBUG", "false") |> boolean!(),
+  log_level: optional("LOG_LEVEL", "info") |> atom!(),
+  cors_origins: optional("CORS_ORIGINS", "http://localhost") |> list!(),
+  request_timeout: optional("REQUEST_TIMEOUT", "30s") |> interval!(),
+  cache_ttl: optional("CACHE_TTL", "5m") |> interval!(:seconds),
+  enabled_features: optional("FEATURES", "feature1,feature2") |> list!(),
+  workers: optional("WORKER_PORTS", "4000,4001,4002") |> list!(&integer!/1)
+```
+
+With a corresponding `.env` file:
+
+```bash
+# .env
+DATABASE_URL=postgresql://localhost/myapp_dev
+PORT=4000
+DEBUG=true
+LOG_LEVEL=debug
+CORS_ORIGINS=http://localhost:3000,http://localhost:4000
+REQUEST_TIMEOUT=60s
+CACHE_TTL=10m
+FEATURES=auth,api,websocket
+WORKER_PORTS=5000,5001,5002
+```
+
+All type conversion functions use the bang (`!`) convention and raise descriptive `ArgumentError` messages if conversion fails. This fail-fast approach ensures invalid configuration is caught at application startup rather than causing issues at runtime.
+
 ## Which approach should I use?
 
 - **Simple approach** - Use when .env files are required for your app to run. Crashes immediately if files are missing or invalid, making issues obvious during development.
