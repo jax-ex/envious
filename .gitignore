@@ -27,3 +27,6 @@ envious-*.tar
 
 # Nix
 .nix-mix
+
+# Claude Code local settings
+.claude/
