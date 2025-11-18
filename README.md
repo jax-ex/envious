@@ -169,9 +169,11 @@ config :my_app,
   secret_key_base: System.fetch_env!("SECRET_KEY_BASE")
 ```
 
-## Helpers
+## Environment Variable Helpers
 
-Envious includes a `Envious.Helpers` module with convenient functions for extracting and converting environment variables in your configuration files. These helpers work with `System.get_env/1` and are designed to be used after loading your `.env` file.
+Envious includes `Envious.Env` with convenient functions for extracting and converting environment variables in your configuration files. These functions work with `System.get_env/1` and are designed to be used after loading your `.env` file.
+
+You can import them with `use Envious` or `import Envious.Env`.
 
 ### Value Extraction Functions
 
@@ -197,10 +199,10 @@ Envious includes a `Envious.Helpers` module with convenient functions for extrac
 ```elixir
 # config/runtime.exs
 import Config
-import Envious.Helpers
+use Envious  # imports both Envious and Envious.Env
 
 # Load .env file into system environment
-".env" |> File.read!() |> Envious.parse!() |> System.put_env()
+".env" |> File.read!() |> parse!() |> System.put_env()
 
 # Use helpers to extract and convert values
 config :my_app, MyApp.Repo,
@@ -235,6 +237,8 @@ WORKER_PORTS=5000,5001,5002
 ```
 
 All type conversion functions use the bang (`!`) convention and raise descriptive `ArgumentError` messages if conversion fails. This fail-fast approach ensures invalid configuration is caught at application startup rather than causing issues at runtime.
+
+**Note:** `Envious.Helpers` is deprecated in favor of `Envious.Env` but remains available for backward compatibility.
 
 ## Which approach should I use?
 

@@ -16,7 +16,27 @@ defmodule Envious do
       ...> BAZ=qux
       ...> \"\"\")
       {:ok, %{"FOO" => "bar", "BAZ" => "qux"}}
+
+  ## Using Envious
+
+  You can `use Envious` to import both the parser functions and the environment
+  variable helpers:
+
+      use Envious
+
+      # Now you have access to:
+      parse!/1              # from Envious
+      optional/1, optional/2  # from Envious.Env
+      required!/1           # from Envious.Env
+      integer!/1, float!/1, etc.  # from Envious.Env
   """
+
+  defmacro __using__(_opts) do
+    quote do
+      import Envious
+      import Envious.Env
+    end
+  end
 
   alias Envious.Parser
 

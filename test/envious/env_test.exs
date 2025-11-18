@@ -1,6 +1,6 @@
-defmodule Envious.HelpersTest do
+defmodule Envious.EnvTest do
   use ExUnit.Case, async: true
-  import Envious.Helpers
+  import Envious.Env
 
   describe "optional/1" do
     setup do
