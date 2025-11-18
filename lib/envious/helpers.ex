@@ -58,7 +58,8 @@ defmodule Envious.Helpers do
   - `list!/1` - Split string into list (comma-separated by default)
   - `list!/2` - Split string and transform each element
   - `interval!/2` - Parse time interval strings like "30s", "5m", "2h"
-  - `uri!/1` - Parse URI string into URI struct
+  - `uri!/1` - Parse URI string
+  - `ip!/1` - Parse IP address (IPv4 or IPv6) into tuple
 
   ## Examples
 
@@ -548,6 +549,55 @@ defmodule Envious.Helpers do
 
       {:error, _} ->
         raise ArgumentError, ~s(could not parse URI "#{value}")
+    end
+  end
+
+  @doc """
+  Parses an IP address string into a tuple.
+
+  Handles both IPv4 and IPv6 addresses. This is commonly used in Phoenix
+  endpoint configuration for binding to specific IP addresses.
+
+  Raises an `ArgumentError` if the IP address cannot be parsed.
+
+  ## Examples
+
+      # IPv4
+      ip!("127.0.0.1")
+      #=> {127, 0, 0, 1}
+
+      ip!("0.0.0.0")
+      #=> {0, 0, 0, 0}
+
+      # IPv6
+      ip!("::1")
+      #=> {0, 0, 0, 0, 0, 0, 0, 1}
+
+      ip!("2001:db8::8a2e:370:7334")
+      #=> {8193, 3512, 0, 0, 0, 35374, 880, 29492}
+
+      # Invalid
+      ip!("not an ip")
+      #=> ** (ArgumentError) could not parse IP address "not an ip"
+
+      # Common Phoenix usage
+      config :my_app, MyAppWeb.Endpoint,
+        http: [ip: required!("HTTP_IP") |> ip!(), port: 4000]
+  """
+  @spec ip!(String.t() | nil) :: :inet.ip_address()
+  def ip!(nil) do
+    raise ArgumentError, "cannot convert nil to IP address"
+  end
+
+  def ip!(value) when is_binary(value) do
+    charlist = String.to_charlist(value)
+
+    case :inet.parse_address(charlist) do
+      {:ok, ip_tuple} ->
+        ip_tuple
+
+      {:error, _} ->
+        raise ArgumentError, ~s(could not parse IP address "#{value}")
     end
   end
 end

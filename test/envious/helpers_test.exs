@@ -428,4 +428,40 @@ defmodule Envious.HelpersTest do
       end
     end
   end
+
+  describe "ip!/1" do
+    test "parses IPv4 addresses" do
+      assert ip!("127.0.0.1") == {127, 0, 0, 1}
+      assert ip!("0.0.0.0") == {0, 0, 0, 0}
+      assert ip!("192.168.1.1") == {192, 168, 1, 1}
+      assert ip!("255.255.255.255") == {255, 255, 255, 255}
+    end
+
+    test "parses IPv6 addresses" do
+      assert ip!("::1") == {0, 0, 0, 0, 0, 0, 0, 1}
+      assert ip!("::") == {0, 0, 0, 0, 0, 0, 0, 0}
+      assert ip!("2001:db8::8a2e:370:7334") == {8193, 3512, 0, 0, 0, 35374, 880, 29492}
+      assert ip!("fe80::1") == {65152, 0, 0, 0, 0, 0, 0, 1}
+    end
+
+    test "raises on invalid IP addresses" do
+      assert_raise ArgumentError, ~s(could not parse IP address "not an ip"), fn ->
+        ip!("not an ip")
+      end
+
+      assert_raise ArgumentError, ~s(could not parse IP address "256.256.256.256"), fn ->
+        ip!("256.256.256.256")
+      end
+
+      assert_raise ArgumentError, ~s(could not parse IP address ""), fn ->
+        ip!("")
+      end
+    end
+
+    test "raises on nil" do
+      assert_raise ArgumentError, "cannot convert nil to IP address", fn ->
+        ip!(nil)
+      end
+    end
+  end
 end

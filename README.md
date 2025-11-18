@@ -190,6 +190,7 @@ Envious includes a `Envious.Helpers` module with convenient functions for extrac
 - **`interval!/1`** - Parse time intervals ("30s", "5m", "2h") to milliseconds (default, like `:timer`)
 - **`interval!/2`** - Parse time intervals to custom unit (:seconds, :minutes, etc.)
 - **`uri!/1`** - Parse URI string
+- **`ip!/1`** - Parse IP address (IPv4 or IPv6) into tuple
 
 ### Usage Example
 
