@@ -327,6 +327,42 @@ defmodule Envious.Env do
   end
 
   @doc """
+  Converts a string module name to a module atom.
+
+  This function splits the string on "." and uses `String.to_existing_atom/1`
+  for each part, then concatenates them with `Module.concat/1`. This safely
+  converts module names without creating new atoms.
+
+  Raises an `ArgumentError` if any part of the module name does not exist as
+  an atom (typically meaning the module hasn't been compiled/loaded).
+
+  ## Examples
+
+      module!("Swoosh.Adapters.Mailgun")
+      #=> Swoosh.Adapters.Mailgun
+
+      module!("String")
+      #=> String
+
+      module!("NonExistent.Module")
+      #=> ** (ArgumentError) module "NonExistent.Module" does not exist
+  """
+  @spec module!(String.t() | nil) :: module()
+  def module!(nil) do
+    raise ArgumentError, "cannot convert nil to module"
+  end
+
+  def module!(value) when is_binary(value) do
+    value
+    |> String.split(".")
+    |> Enum.map(&String.to_existing_atom/1)
+    |> Module.concat()
+  rescue
+    ArgumentError ->
+      raise ArgumentError, ~s(module "#{value}" does not exist)
+  end
+
+  @doc """
   Splits a string into a list using a delimiter.
 
   Accepts options:

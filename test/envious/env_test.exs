@@ -216,6 +216,30 @@ defmodule Envious.EnvTest do
     end
   end
 
+  describe "module!/1" do
+    test "converts module name strings to modules" do
+      assert module!("String") == String
+      assert module!("Enum") == Enum
+      assert module!("String.Chars") == String.Chars
+    end
+
+    test "handles nested modules" do
+      assert module!("Mix.Tasks.Compile") == Mix.Tasks.Compile
+    end
+
+    test "raises when module does not exist" do
+      assert_raise ArgumentError, ~s(module "NonExistent.Module.XYZ123" does not exist), fn ->
+        module!("NonExistent.Module.XYZ123")
+      end
+    end
+
+    test "raises on nil" do
+      assert_raise ArgumentError, "cannot convert nil to module", fn ->
+        module!(nil)
+      end
+    end
+  end
+
   describe "list!/1" do
     test "splits on comma by default" do
       assert list!("a,b,c") == ["a", "b", "c"]
