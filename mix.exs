@@ -4,7 +4,7 @@ defmodule Envious.MixProject do
   def project do
     [
       app: :envious,
-      version: "1.3.0",
+      version: "1.4.0",
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
