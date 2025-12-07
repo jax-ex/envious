@@ -40,7 +40,9 @@ Envious.parse(dotenv)
 ## API
 
 - **`Envious.parse/1`** - Returns `{:ok, map}` or `{:error, message}`
+- **`Envious.parse/2`** - Same as above, with options (`:interpolate`, `:undefined_vars`)
 - **`Envious.parse!/1`** - Returns `map` or raises `RuntimeError`
+- **`Envious.parse!/2`** - Same as above, with options
 
 ## Features
 
@@ -82,6 +84,93 @@ Envious.parse(dotenv)
 #      "CERT" => "-----BEGIN CERTIFICATE-----\nMIIBkTCB+w...\n-----END CERTIFICATE-----"
 #    }}
 ```
+
+## Variable Interpolation
+
+Envious supports opt-in shell-style variable interpolation with `$VAR` and `${VAR}` syntax.
+
+**Interpolation is disabled by default** for backward compatibility and security. Enable it with the `:interpolate` option:
+
+```elixir
+dotenv = """
+BASE_PATH=/app
+CONFIG_PATH=$BASE_PATH/config
+BIN_PATH=${BASE_PATH}/bin
+"""
+
+Envious.parse(dotenv, interpolate: true)
+# => {:ok, %{
+#      "BASE_PATH" => "/app",
+#      "CONFIG_PATH" => "/app/config",
+#      "BIN_PATH" => "/app/bin"
+#    }}
+```
+
+### Shell Semantics
+
+Interpolation follows shell behavior:
+
+- **Double quotes**: Variables are interpolated
+- **Single quotes**: Variables are preserved literally (no interpolation)
+- **Unquoted values**: Variables are interpolated when `$` is followed by a valid name
+- **Escape**: Use `\$` in double quotes for a literal `$`
+
+```elixir
+dotenv = """
+NAME=world
+DOUBLE="Hello $NAME"
+SINGLE='Hello $NAME'
+PRICE="\\$99.99"
+"""
+
+Envious.parse(dotenv, interpolate: true)
+# => {:ok, %{
+#      "NAME" => "world",
+#      "DOUBLE" => "Hello world",
+#      "SINGLE" => "Hello $NAME",
+#      "PRICE" => "$99.99"
+#    }}
+```
+
+### Undefined Variables
+
+Control how undefined variables are handled with the `:undefined_vars` option:
+
+| Option | Behavior | Example (`$UNKNOWN`) |
+|--------|----------|---------------------|
+| `:keep` (default) | Preserve literal text | `"$UNKNOWN"` |
+| `:empty` | Replace with empty string | `""` |
+| `:error` | Return error | `{:error, "Undefined variable: UNKNOWN"}` |
+
+```elixir
+# Default: keep undefined as literal (safest)
+Envious.parse("PATH=$UNDEFINED/bin", interpolate: true)
+# => {:ok, %{"PATH" => "$UNDEFINED/bin"}}
+
+# Shell-compatible: replace with empty string
+Envious.parse("PATH=$UNDEFINED/bin", interpolate: true, undefined_vars: :empty)
+# => {:ok, %{"PATH" => "/bin"}}
+
+# Strict: error on undefined
+Envious.parse("PATH=$UNDEFINED/bin", interpolate: true, undefined_vars: :error)
+# => {:error, "Undefined variable: UNDEFINED"}
+```
+
+### Variable Resolution Order
+
+Variables are resolved in definition order. A variable can reference any variable defined earlier in the file:
+
+```elixir
+dotenv = """
+A=1
+B=$A
+C=$B
+"""
+
+Envious.parse(dotenv, interpolate: true)
+# => {:ok, %{"A" => "1", "B" => "1", "C" => "1"}}
+```
+
 ### Example of how one might use this.
 
 Now that `config/runtime.exs` exists in Elixir, it is possible to load environment

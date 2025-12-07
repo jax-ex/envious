@@ -49,8 +49,7 @@ defmodule Envious.ParserTest do
     export B="bar and ${A}"
     """
 
-    # Parser just parses - interpolation happens in Envious module
-    result = Envious.parse(file)
+    result = Envious.parse(file, interpolate: true)
     assert result == {:ok, %{"A" => "foo", "B" => "bar and foo"}}
   end
 
@@ -60,7 +59,7 @@ defmodule Envious.ParserTest do
     B="world and $A"
     """
 
-    result = Envious.parse(file)
+    result = Envious.parse(file, interpolate: true)
     assert result == {:ok, %{"A" => "hello", "B" => "world and hello"}}
   end
 
@@ -70,7 +69,7 @@ defmodule Envious.ParserTest do
     export B=bar-$A-baz
     """
 
-    result = Envious.parse(file)
+    result = Envious.parse(file, interpolate: true)
     assert result == {:ok, %{"A" => "foo", "B" => "bar-foo-baz"}}
   end
 
@@ -80,18 +79,26 @@ defmodule Envious.ParserTest do
     export B="B and ${A} or $A"
     """
 
-    result = Envious.parse(file)
+    result = Envious.parse(file, interpolate: true)
     assert result == {:ok, %{"A" => "A", "B" => "B and A or A"}}
   end
 
-  test "variable interpolation with undefined variable" do
+  test "variable interpolation with undefined variable resolves to empty with :empty option" do
     file = """
     B="value is $UNDEFINED"
     """
 
-    result = Envious.parse(file)
-    # Undefined variables resolve to empty string
+    result = Envious.parse(file, interpolate: true, undefined_vars: :empty)
     assert result == {:ok, %{"B" => "value is "}}
+  end
+
+  test "variable interpolation with undefined variable keeps literal with :keep option" do
+    file = """
+    B="value is $UNDEFINED"
+    """
+
+    result = Envious.parse(file, interpolate: true, undefined_vars: :keep)
+    assert result == {:ok, %{"B" => "value is $UNDEFINED"}}
   end
 
   test "single quotes do not interpolate variables" do
@@ -100,7 +107,7 @@ defmodule Envious.ParserTest do
     B='$A is not interpolated'
     """
 
-    result = Envious.parse(file)
+    result = Envious.parse(file, interpolate: true)
     assert result == {:ok, %{"A" => "foo", "B" => "$A is not interpolated"}}
   end
 
@@ -111,7 +118,7 @@ defmodule Envious.ParserTest do
     C="$A $B from ${A} and ${B}"
     """
 
-    result = Envious.parse(file)
+    result = Envious.parse(file, interpolate: true)
 
     assert result ==
              {:ok, %{"A" => "hello", "B" => "world", "C" => "hello world from hello and world"}}
@@ -124,7 +131,7 @@ defmodule Envious.ParserTest do
     C=$B-baz
     """
 
-    result = Envious.parse(file)
+    result = Envious.parse(file, interpolate: true)
     assert result == {:ok, %{"A" => "foo", "B" => "foo-bar", "C" => "foo-bar-baz"}}
   end
 end

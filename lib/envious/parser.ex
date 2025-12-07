@@ -137,25 +137,40 @@ defmodule Envious.Parser do
       ?]..?~
     ])
 
+  # Escaped dollar sign (for interpolation mode)
+  # Converts \$ to a literal $ character tagged as a literal
+  escaped_dollar =
+    string("\\$")
+    |> replace({:literal, "$"})
+
   # Variable interpolation: $VAR or ${VAR}
-  # Returns the variable name tagged for later interpolation
+  # Returns the variable name tagged with :var for later resolution
+  # ${VAR} is checked first because $VAR would match the $ in ${VAR}
   var_interpolation =
     choice([
-      # ${VAR} format - capture just the variable name
+      # ${VAR} format - braced variable reference
       ignore(string("${"))
       |> concat(var_name)
       |> ignore(string("}"))
-      |> tag(:var_interp),
-      # $VAR format - capture just the variable name
+      |> unwrap_and_tag(:var),
+      # $VAR format - simple variable reference
       ignore(string("$"))
       |> concat(var_name)
-      |> tag(:var_interp)
+      |> unwrap_and_tag(:var)
     ])
 
-  # Content inside double quotes: escape sequences, variable interpolation, or regular characters
-  # Double quotes allow variable interpolation (like shell behavior)
+  # Content inside double quotes (non-interpolating mode): escape sequences or regular characters
   double_quoted_content =
     choice([
+      escape_sequence,
+      double_quoted_regular_char
+    ])
+
+  # Content inside double quotes (interpolating mode): escaped $, variables, escapes, or regular chars
+  # Order matters: escaped_dollar must come before var_interpolation
+  double_quoted_content_interpolated =
+    choice([
+      escaped_dollar,
       var_interpolation,
       escape_sequence,
       double_quoted_regular_char
@@ -169,18 +184,25 @@ defmodule Envious.Parser do
       single_quoted_regular_char
     ])
 
-  # Double-quoted value: "value with spaces and $VAR interpolation"
-  # - Handles escape sequences, variable interpolation, and regular characters
-  # - Post-processes to build string with interpolations resolved
+  # Double-quoted value (non-interpolating): "value with spaces"
+  # Returns a plain string after processing escape sequences
   double_quoted_value =
     ignore(double_quote)
     |> times(double_quoted_content, min: 0)
     |> ignore(double_quote)
-    |> post_traverse(:build_quoted_value)
+    |> reduce({List, :to_string, []})
+    |> post_traverse(:process_escape_sequences)
 
-  # Single-quoted value: 'value with spaces, no interpolation'
+  # Double-quoted value (interpolating): "value with $VAR interpolation"
+  # Returns a list of tokens: {:literal, str} and {:var, name}
+  double_quoted_value_interpolated =
+    ignore(double_quote)
+    |> times(double_quoted_content_interpolated, min: 0)
+    |> ignore(double_quote)
+    |> post_traverse(:build_token_list)
+
+  # Single-quoted value: 'value with spaces'
   # - Handles escape sequences and regular characters
-  # - Post-processes to convert escape sequences to actual characters
   # - Does NOT support variable interpolation (like shell behavior)
   single_quoted_value =
     ignore(single_quote)
@@ -189,19 +211,31 @@ defmodule Envious.Parser do
     |> reduce({List, :to_string, []})
     |> post_traverse(:process_escape_sequences)
 
-  # Value characters for unquoted values: Accept most printable ASCII except:
-  # - Newline (\n) and carriage return (\r) - these end the value
-  # - Hash (#) - this starts an inline comment
-  # - Quotes (" and ') - these start quoted values
-  # - Dollar ($) - this starts variable interpolation
-  # - Brace ({, }) - reserved for ${VAR} syntax
-  #
-  # Character ranges:
-  # - ?\s..?! is space (0x20) through exclamation (0x21), excluding double-quote (0x22)
-  # - ?%..?& is percent through ampersand, excluding hash (0x23) and single-quote (0x27)
-  # - ?(..?z is open-paren through lowercase z, excluding braces ({ and })
-  # - ?|..?~ is pipe through tilde
+  # Single-quoted value for interpolation mode (still no interpolation - shell semantics)
+  # Returns a single {:literal, str} token
+  single_quoted_value_interpolated =
+    ignore(single_quote)
+    |> times(single_quoted_content, min: 0)
+    |> ignore(single_quote)
+    |> reduce({List, :to_string, []})
+    |> post_traverse(:wrap_as_literal_token)
+
+  # Value characters for unquoted values (non-interpolating mode)
+  # Accepts most printable ASCII except: newline, carriage return, hash, quotes
+  # INCLUDES $ as a regular character for backward compatibility
   unquoted_value_char =
+    utf8_char([
+      # Space (32) through exclamation (33), which excludes double-quote (34)
+      ?\s..?!,
+      # Dollar (36) through ampersand (38), which excludes hash (35) and single-quote (39)
+      ?$..?&,
+      # Open-paren (40) through tilde (126) - includes all alphanumeric and symbols
+      ?(..?~
+    ])
+
+  # Value characters for unquoted values (interpolating mode)
+  # Excludes $ and braces which have special meaning
+  unquoted_value_char_interpolated =
     utf8_char([
       # Space (32) through exclamation (33), which excludes double-quote (34)
       ?\s..?!,
@@ -213,30 +247,47 @@ defmodule Envious.Parser do
       ?|..?~
     ])
 
-  # Unquoted value content: either variable interpolation or regular characters
-  unquoted_value_content =
+  # Literal dollar sign when not followed by a valid variable name start
+  # This allows $100 to remain as $100 instead of trying to interpolate
+  literal_dollar =
+    string("$")
+    |> lookahead_not(utf8_char([?A..?Z, ?a..?z, ?_]))
+
+  # Unquoted value content (interpolating mode): variable, literal $, or regular chars
+  unquoted_value_content_interpolated =
     choice([
       var_interpolation,
-      unquoted_value_char
+      literal_dollar,
+      unquoted_value_char_interpolated
     ])
 
-  # Unquoted value: supports variable interpolation
-  # - Collect 0 or more value parts (allows empty values like KEY=)
-  # - Post-process to trim whitespace (handles inline comments: "value # comment")
+  # Unquoted value (non-interpolating): plain string with trimming
   unquoted_value =
-    times(unquoted_value_content, min: 0)
-    |> post_traverse(:build_unquoted_value)
+    times(unquoted_value_char, min: 0)
+    |> reduce({List, :to_string, []})
+    |> post_traverse(:trim_value)
 
-  # Parse the value portion after the = sign
-  # Values can be:
-  # - Double-quoted: "value with spaces"
-  # - Single-quoted: 'value with spaces'
-  # - Unquoted: value (must not contain spaces, quotes, or hash)
+  # Unquoted value (interpolating): returns list of tokens
+  unquoted_value_interpolated =
+    times(unquoted_value_content_interpolated, min: 0)
+    |> post_traverse(:build_unquoted_token_list)
+
+  # Parse the value portion after the = sign (non-interpolating mode)
+  # Returns a plain string
   val =
     choice([
       double_quoted_value,
       single_quoted_value,
       unquoted_value
+    ])
+
+  # Parse the value portion after the = sign (interpolating mode)
+  # Returns a list of tokens: {:literal, str} and {:var, name}
+  val_interpolated =
+    choice([
+      double_quoted_value_interpolated,
+      single_quoted_value_interpolated,
+      unquoted_value_interpolated
     ])
 
   # Key-value pair parser: [export] KEY=VALUE[newline]
@@ -261,6 +312,16 @@ defmodule Envious.Parser do
     |> ignore(optional(line_terminator))
     |> post_traverse(:to_tuple)
 
+  # Key-value pair parser for interpolation mode
+  # Value is a list of tokens instead of a string
+  key_value_interpolated =
+    optional(ignore(export))
+    |> concat(var_name)
+    |> ignore(equals)
+    |> concat(val_interpolated)
+    |> ignore(optional(line_terminator))
+    |> post_traverse(:to_tuple_with_tokens)
+
   # Comment line parser: # comment text [newline]
   #
   # Comments are completely ignored and don't contribute to the parse result
@@ -268,21 +329,10 @@ defmodule Envious.Parser do
     comment
     |> ignore(optional(line_terminator))
 
-  # Main parser entry point
-  #
-  # Structure:
-  # 1. Ignore any leading whitespace/newlines
-  # 2. Repeatedly parse either:
-  #    - A key-value pair (contributes to result as a tuple)
-  #    - A comment line (ignored)
-  #    Then ignore any trailing whitespace/newlines after each entry
-  #
-  # This allows blank lines between entries and trailing whitespace in the file.
+  # Main parser entry point (non-interpolating mode)
   #
   # Returns: {:ok, [{key1, value1}, {key2, value2}, ...], remaining, context, position, offset}
-  #
-  # Each key-value pair is returned as a tuple, making the structure self-documenting
-  # and allowing the Envious module to use Map.new/1 directly.
+  # Values are plain strings.
   defparsec :parse,
             ignore(times(ignored, min: 0))
             |> repeat(
@@ -290,85 +340,116 @@ defmodule Envious.Parser do
               |> ignore(times(ignored, min: 0))
             )
 
+  # Parser entry point for interpolation mode
+  #
+  # Returns: {:ok, [{key1, tokens1}, {key2, tokens2}, ...], remaining, context, position, offset}
+  # Tokens are lists of {:literal, str} and {:var, name} tuples.
+  defparsec :parse_interpolated,
+            ignore(times(ignored, min: 0))
+            |> repeat(
+              choice([key_value_interpolated, ignore(comment_line)])
+              |> ignore(times(ignored, min: 0))
+            )
+
   ## Helper Functions
 
   # Callback for repeat_while that stops when encountering a line terminator
   # Used by the comment parser to consume characters until end of line
-  #
-  # Returns:
-  # - {:halt, context} when a newline or carriage return is found
-  # - {:cont, context} to continue consuming characters
   defp not_line_terminator(<<?\n, _::binary>>, context, _, _), do: {:halt, context}
   defp not_line_terminator(<<?\r, _::binary>>, context, _, _), do: {:halt, context}
   defp not_line_terminator(_, context, _, _), do: {:cont, context}
 
-  # Post-traversal callback to build a quoted value with variable interpolation support
-  #
-  # Takes the accumulated tokens (which may include :var_interp tags and character codes)
-  # and builds a single string value. Variable interpolations are left as markers
-  # to be resolved later by the main Envious module.
-  #
-  # Parameters:
-  # - rest: Remaining input after parsing
-  # - acc: Accumulated tokens from the quoted value
-  # - context: Parser context
-  # - _line, _offset: Position information (unused)
-  #
-  # Returns: {rest, [string_value], context}
-  defp build_quoted_value(rest, acc, context, _line, _offset) do
-    # Reverse the accumulator and build the string
-    value = acc |> Enum.reverse() |> build_value_string([])
-    {rest, [value], context}
+  # Trim whitespace from unquoted values (non-interpolating mode)
+  defp trim_value(rest, [value], context, _line, _offset) when is_binary(value) do
+    {rest, [String.trim(value)], context}
   end
 
-  # Post-traversal callback to build an unquoted value with variable interpolation support
-  #
-  # Similar to build_quoted_value but also trims whitespace.
-  #
-  # Parameters:
-  # - rest: Remaining input after parsing
-  # - acc: Accumulated tokens from the unquoted value
-  # - context: Parser context
-  # - _line, _offset: Position information (unused)
-  #
-  # Returns: {rest, [string_value], context}
-  defp build_unquoted_value(rest, acc, context, _line, _offset) do
-    # Reverse the accumulator and build the string, then trim
-    value = acc |> Enum.reverse() |> build_value_string([]) |> String.trim()
-    {rest, [value], context}
+  defp trim_value(rest, acc, context, _line, _offset) do
+    {rest, acc, context}
   end
 
-  # Build a string from a list of tokens, handling variable interpolations
-  # Tokens can be:
-  # - Integers (character codes)
-  # - {:var_interp, [var_name]} tuples representing variable interpolations
-  # Returns a string with interpolation markers using a special syntax that won't conflict with user input
-  defp build_value_string([], acc) do
-    acc
-    |> Enum.reverse()
-    |> IO.iodata_to_binary()
-    |> process_escapes_in_string([])
-    |> IO.iodata_to_binary()
+  # Build a list of tokens from parsed content (interpolating mode)
+  # Tokens can be: {:literal, str}, {:var, name}, integers (char codes), or strings
+  defp build_token_list(rest, acc, context, _line, _offset) do
+    tokens = acc |> Enum.reverse() |> normalize_tokens([])
+    {rest, [tokens], context}
   end
 
-  defp build_value_string([{:var_interp, [var_name]} | rest], acc) when is_binary(var_name) do
-    # Use a special marker that won't conflict with normal .env content
-    # Format: __ENVIOUS_VAR__[varname]__
-    build_value_string(rest, ["__ENVIOUS_VAR__[#{var_name}]__" | acc])
+  # Wrap a string value as a single literal token (for single-quoted values in interpolating mode)
+  defp wrap_as_literal_token(rest, [value], context, _line, _offset) when is_binary(value) do
+    processed = value |> process_escapes([]) |> IO.iodata_to_binary()
+    {rest, [[{:literal, processed}]], context}
   end
 
-  defp build_value_string([char | rest], acc) when is_integer(char) do
-    build_value_string(rest, [<<char::utf8>> | acc])
+  defp wrap_as_literal_token(rest, acc, context, _line, _offset) do
+    {rest, acc, context}
   end
 
-  defp build_value_string([other | rest], acc) do
-    # Handle any other tokens (shouldn't normally happen)
-    build_value_string(rest, [to_string(other) | acc])
+  # Build a list of tokens from unquoted content, trimming trailing whitespace
+  defp build_unquoted_token_list(rest, acc, context, _line, _offset) do
+    tokens = acc |> Enum.reverse() |> normalize_tokens([]) |> trim_trailing_token()
+    {rest, [tokens], context}
   end
 
-  # Process escape sequences in a string (for values that support them)
-  defp process_escapes_in_string(binary, acc) when is_binary(binary) do
-    process_escapes(binary, acc)
+  # Normalize accumulated content into a list of {:literal, str} and {:var, name} tokens
+  # Combines adjacent characters and strings into single literals
+  defp normalize_tokens([], acc), do: Enum.reverse(acc)
+
+  # Variable reference (already tagged)
+  defp normalize_tokens([{:var, name} | rest], acc) do
+    normalize_tokens(rest, [{:var, name} | acc])
+  end
+
+  # Literal tuple (from escaped_dollar)
+  defp normalize_tokens([{:literal, str} | rest], [{:literal, prev} | acc_rest]) do
+    normalize_tokens(rest, [{:literal, prev <> str} | acc_rest])
+  end
+
+  defp normalize_tokens([{:literal, str} | rest], acc) do
+    normalize_tokens(rest, [{:literal, str} | acc])
+  end
+
+  # String (from literal_dollar or reduce)
+  defp normalize_tokens([str | rest], [{:literal, prev} | acc_rest]) when is_binary(str) do
+    normalize_tokens(rest, [{:literal, prev <> str} | acc_rest])
+  end
+
+  defp normalize_tokens([str | rest], acc) when is_binary(str) do
+    normalize_tokens(rest, [{:literal, str} | acc])
+  end
+
+  # Integer character code
+  defp normalize_tokens([char | rest], [{:literal, prev} | acc_rest]) when is_integer(char) do
+    normalize_tokens(rest, [{:literal, prev <> <<char::utf8>>} | acc_rest])
+  end
+
+  defp normalize_tokens([char | rest], acc) when is_integer(char) do
+    normalize_tokens(rest, [{:literal, <<char::utf8>>} | acc])
+  end
+
+  # Process escape sequences in literal tokens
+  defp normalize_tokens([other | rest], acc) do
+    # Fallback for any unexpected token type
+    normalize_tokens(rest, acc ++ [other])
+  end
+
+  # Trim trailing whitespace from the last literal token
+  defp trim_trailing_token([]), do: []
+
+  defp trim_trailing_token(tokens) do
+    case List.last(tokens) do
+      {:literal, str} ->
+        trimmed = String.trim_trailing(str)
+
+        if trimmed == "" do
+          tokens |> Enum.reverse() |> tl() |> Enum.reverse() |> trim_trailing_token()
+        else
+          List.replace_at(tokens, -1, {:literal, trimmed})
+        end
+
+      _ ->
+        tokens
+    end
   end
 
   # Post-traversal callback to convert [value, key] list to {key, value} tuple
@@ -393,6 +474,23 @@ defmodule Envious.Parser do
 
   # Fallback clause for to_tuple when accumulator doesn't match expected pattern
   defp to_tuple(rest, acc, context, _line, _offset) do
+    {rest, acc, context}
+  end
+
+  # Convert [tokens, key] to {key, tokens} tuple for interpolation mode
+  # Tokens is a list of {:literal, str} and {:var, name} tuples
+  defp to_tuple_with_tokens(rest, [tokens, key], context, _line, _offset) when is_list(tokens) do
+    # Process escape sequences in literal tokens
+    processed_tokens =
+      Enum.map(tokens, fn
+        {:literal, str} -> {:literal, str |> process_escapes([]) |> IO.iodata_to_binary()}
+        other -> other
+      end)
+
+    {rest, [{key, processed_tokens}], context}
+  end
+
+  defp to_tuple_with_tokens(rest, acc, context, _line, _offset) do
     {rest, acc, context}
   end
 

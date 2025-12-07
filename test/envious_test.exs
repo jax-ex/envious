@@ -396,59 +396,125 @@ defmodule EnviousTest do
 
   describe "variable interpolation" do
     test "basic interpolation with ${VAR} syntax" do
-      assert Envious.parse("""
-             A=foo
-             B=${A}bar
-             """) == {:ok, %{"A" => "foo", "B" => "foobar"}}
+      assert Envious.parse(
+               """
+               A=foo
+               B=${A}bar
+               """,
+               interpolate: true
+             ) == {:ok, %{"A" => "foo", "B" => "foobar"}}
     end
 
     test "basic interpolation with $VAR syntax" do
-      assert Envious.parse("""
-             A=foo
-             B=$A-bar
-             """) == {:ok, %{"A" => "foo", "B" => "foo-bar"}}
+      assert Envious.parse(
+               """
+               A=foo
+               B=$A-bar
+               """,
+               interpolate: true
+             ) == {:ok, %{"A" => "foo", "B" => "foo-bar"}}
     end
 
     test "interpolation in double quotes" do
-      assert Envious.parse("""
-             export A="A"
-             export B="B and ${A} or $A"
-             """) == {:ok, %{"A" => "A", "B" => "B and A or A"}}
+      assert Envious.parse(
+               """
+               export A="A"
+               export B="B and ${A} or $A"
+               """,
+               interpolate: true
+             ) == {:ok, %{"A" => "A", "B" => "B and A or A"}}
     end
 
     test "single quotes do not interpolate" do
-      assert Envious.parse("""
-             A=foo
-             B='$A and ${A} are literal'
-             """) == {:ok, %{"A" => "foo", "B" => "$A and ${A} are literal"}}
+      assert Envious.parse(
+               """
+               A=foo
+               B='$A and ${A} are literal'
+               """,
+               interpolate: true
+             ) == {:ok, %{"A" => "foo", "B" => "$A and ${A} are literal"}}
     end
 
     test "chained variable references" do
-      assert Envious.parse("""
-             A=hello
-             B=$A-world
-             C=$B!
-             """) == {:ok, %{"A" => "hello", "B" => "hello-world", "C" => "hello-world!"}}
+      assert Envious.parse(
+               """
+               A=hello
+               B=$A-world
+               C=$B!
+               """,
+               interpolate: true
+             ) == {:ok, %{"A" => "hello", "B" => "hello-world", "C" => "hello-world!"}}
     end
 
-    test "undefined variable resolves to empty string" do
-      assert Envious.parse("B=$UNDEFINED-value") == {:ok, %{"B" => "-value"}}
+    test "undefined variable resolves to empty string with :empty option" do
+      assert Envious.parse("B=$UNDEFINED-value", interpolate: true, undefined_vars: :empty) ==
+               {:ok, %{"B" => "-value"}}
+    end
+
+    test "undefined variable keeps literal with default :keep option" do
+      assert Envious.parse("B=$UNDEFINED-value", interpolate: true) ==
+               {:ok, %{"B" => "$UNDEFINED-value"}}
     end
 
     test "multiple interpolations in one value" do
-      assert Envious.parse("""
-             A=hello
-             B=world
-             C="$A $B from ${A} and ${B}"
-             """) ==
+      assert Envious.parse(
+               """
+               A=hello
+               B=world
+               C="$A $B from ${A} and ${B}"
+               """,
+               interpolate: true
+             ) ==
                {:ok, %{"A" => "hello", "B" => "world", "C" => "hello world from hello and world"}}
     end
 
     test "interpolation in unquoted values" do
+      assert Envious.parse(
+               """
+               BASE=/usr/local
+               BIN_PATH=$BASE/bin
+               """,
+               interpolate: true
+             ) == {:ok, %{"BASE" => "/usr/local", "BIN_PATH" => "/usr/local/bin"}}
+    end
+
+    test "interpolation disabled by default preserves $VAR literally" do
       assert Envious.parse("""
-             BASE=/usr/local
-             BIN_PATH=$BASE/bin
-             """) == {:ok, %{"BASE" => "/usr/local", "BIN_PATH" => "/usr/local/bin"}}
+             A=foo
+             B=$A-bar
+             """) == {:ok, %{"A" => "foo", "B" => "$A-bar"}}
+    end
+
+    test "escaped dollar sign in double quotes" do
+      assert Envious.parse(~s(PRICE="\\$99.99"), interpolate: true) ==
+               {:ok, %{"PRICE" => "$99.99"}}
+    end
+
+    test "dollar sign not followed by valid var name stays literal" do
+      assert Envious.parse("PRICE=$100", interpolate: true) ==
+               {:ok, %{"PRICE" => "$100"}}
+    end
+
+    test "undefined variable with :error option returns error" do
+      assert {:error, message} =
+               Envious.parse("B=$UNDEFINED", interpolate: true, undefined_vars: :error)
+
+      assert message =~ "Undefined variable: UNDEFINED"
+    end
+
+    test "parse! with interpolation" do
+      assert Envious.parse!(
+               """
+               A=foo
+               B=$A-bar
+               """,
+               interpolate: true
+             ) == %{"A" => "foo", "B" => "foo-bar"}
+    end
+
+    test "self-reference is treated as undefined" do
+      assert Envious.parse("A=$A-value", interpolate: true) ==
+               {:ok, %{"A" => "$A-value"}}
     end
   end
 end
