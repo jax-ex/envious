@@ -1,6 +1,8 @@
 defmodule EnviousTest do
   use ExUnit.Case, async: true
 
+  doctest Envious
+
   test "simple parse" do
     assert Envious.parse("FOO=bar") == {:ok, %{"FOO" => "bar"}}
   end
@@ -232,6 +234,20 @@ defmodule EnviousTest do
     end
   end
 
+  test "error reports 1-based line and column of unparsed input" do
+    assert Envious.parse("A=1\nB=\"x\" trailing") ==
+             {:error,
+              ~s(Parse error at line 2, column 7: could not parse remaining input starting with: "trailing")}
+  end
+
+  test "error preview is truncated only when input is longer than 20 characters" do
+    assert {:error, message} = Envious.parse("A=\"x\" 12345678901234567890 tail")
+    assert message =~ ~s(starting with: "12345678901234567890...")
+
+    assert {:error, message} = Envious.parse("A=\"x\" short   ")
+    assert message =~ ~s(starting with: "short")
+  end
+
   test "parse! raises on unclosed quote" do
     assert_raise RuntimeError, ~r/Parse error at line 1/, fn ->
       Envious.parse!("KEY=\"unclosed")
@@ -373,6 +389,15 @@ defmodule EnviousTest do
     assert Envious.parse("\uFEFFKEY=value") == {:ok, %{"KEY" => "value"}}
   end
 
+  test "non-ASCII characters in values" do
+    assert Envious.parse("""
+           NAME=José
+           GREETING="¡Hola, 世界! 👋"
+           CITY='Zürich'
+           """) ==
+             {:ok, %{"NAME" => "José", "GREETING" => "¡Hola, 世界! 👋", "CITY" => "Zürich"}}
+  end
+
   test "multiple equals in quoted value" do
     assert Envious.parse("MATH=\"2+2=4 and 3+3=6\"") == {:ok, %{"MATH" => "2+2=4 and 3+3=6"}}
   end
@@ -500,6 +525,18 @@ defmodule EnviousTest do
                Envious.parse("B=$UNDEFINED", interpolate: true, undefined_vars: :error)
 
       assert message =~ "Undefined variable: UNDEFINED"
+    end
+
+    test "non-ASCII characters with interpolation" do
+      assert Envious.parse(~s(NAME=José\nA=¡$NAME!\nB="${NAME} 👋"\nC='$NAME ü'),
+               interpolate: true
+             ) ==
+               {:ok, %{"NAME" => "José", "A" => "¡José!", "B" => "José 👋", "C" => "$NAME ü"}}
+    end
+
+    test "literal braces in unquoted values" do
+      assert Envious.parse("A=x\nB={$A}\nC=${1}\nD=a{b}c", interpolate: true) ==
+               {:ok, %{"A" => "x", "B" => "{x}", "C" => "${1}", "D" => "a{b}c"}}
     end
 
     test "parse! with interpolation" do

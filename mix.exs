@@ -27,7 +27,7 @@ defmodule Envious.MixProject do
   defp deps do
     [
       {:nimble_parsec, "~> 1.0"},
-      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false}
     ]
   end
 

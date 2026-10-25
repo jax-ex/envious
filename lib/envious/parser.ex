@@ -26,7 +26,7 @@ defmodule Envious.Parser do
       {:ok, [{"FOO", "bar"}], "", %{}, {1, 0}, 7}
 
       iex> Envious.Parser.parse("export KEY=value\\n# comment\\nFOO=bar")
-      {:ok, [{"KEY", "value"}, {"FOO", "bar"}], "", %{}, ...}
+      {:ok, [{"KEY", "value"}, {"FOO", "bar"}], "", %{}, {3, 27}, 34}
   """
 
   import NimbleParsec
@@ -38,6 +38,8 @@ defmodule Envious.Parser do
   @space 0x0020
   @unicode_bom 0xFEFF
   @equals 0x003D
+  # Every codepoint above ASCII, so values can contain accented letters, emoji, etc.
+  @non_ascii 0x0080..0x10FFFF
 
   # Match any single unicode character (used for consuming comment text)
   any_unicode = utf8_char([])
@@ -118,7 +120,9 @@ defmodule Envious.Parser do
       # Hash (#) through open-bracket ([), excluding backslash (\\)
       ?#..?[,
       # Close-bracket (]) through tilde (~)
-      ?]..?~
+      ?]..?~,
+      # Any non-ASCII unicode character
+      @non_ascii
     ])
 
   # Regular character inside single-quoted strings (not backslash, not single-quote)
@@ -134,7 +138,9 @@ defmodule Envious.Parser do
       # Open-paren (() through open-bracket ([), excluding backslash (\\)
       ?(..?[,
       # Close-bracket (]) through tilde (~)
-      ?]..?~
+      ?]..?~,
+      # Any non-ASCII unicode character
+      @non_ascii
     ])
 
   # Escaped dollar sign (for interpolation mode)
@@ -230,21 +236,23 @@ defmodule Envious.Parser do
       # Dollar (36) through ampersand (38), which excludes hash (35) and single-quote (39)
       ?$..?&,
       # Open-paren (40) through tilde (126) - includes all alphanumeric and symbols
-      ?(..?~
+      ?(..?~,
+      # Any non-ASCII unicode character
+      @non_ascii
     ])
 
   # Value characters for unquoted values (interpolating mode)
-  # Excludes $ and braces which have special meaning
+  # Excludes $, which is handled by var_interpolation and literal_dollar
   unquoted_value_char_interpolated =
     utf8_char([
       # Space (32) through exclamation (33), which excludes double-quote (34)
       ?\s..?!,
       # Percent (37) through ampersand (38), which excludes hash (35), dollar (36), and single-quote (39)
       ?%..?&,
-      # Open-paren (40) through lowercase z (122), which excludes left-brace (123)
-      ?(..?z,
-      # Pipe (124) through tilde (126), which excludes right-brace (125)
-      ?|..?~
+      # Open-paren (40) through tilde (126) - includes all alphanumeric and symbols
+      ?(..?~,
+      # Any non-ASCII unicode character
+      @non_ascii
     ])
 
   # Literal dollar sign when not followed by a valid variable name start
@@ -427,10 +435,9 @@ defmodule Envious.Parser do
     normalize_tokens(rest, [{:literal, <<char::utf8>>} | acc])
   end
 
-  # Process escape sequences in literal tokens
+  # Fallback for any unexpected token type
   defp normalize_tokens([other | rest], acc) do
-    # Fallback for any unexpected token type
-    normalize_tokens(rest, acc ++ [other])
+    normalize_tokens(rest, [other | acc])
   end
 
   # Trim trailing whitespace from the last literal token
@@ -442,7 +449,7 @@ defmodule Envious.Parser do
         trimmed = String.trim_trailing(str)
 
         if trimmed == "" do
-          tokens |> Enum.reverse() |> tl() |> Enum.reverse() |> trim_trailing_token()
+          tokens |> List.delete_at(-1) |> trim_trailing_token()
         else
           List.replace_at(tokens, -1, {:literal, trimmed})
         end
