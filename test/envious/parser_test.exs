@@ -3,6 +3,8 @@ defmodule Envious.ParserTest do
 
   alias Envious.Parser
 
+  doctest Envious.Parser
+
   test "simplest env" do
     assert Parser.parse("FOO=bar") == {:ok, [{"FOO", "bar"}], "", %{}, {1, 0}, 7}
   end

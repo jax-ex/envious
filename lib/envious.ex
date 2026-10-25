@@ -89,8 +89,8 @@ defmodule Envious do
       iex> Envious.parse("B=$UNDEFINED", interpolate: true, undefined_vars: :empty)
       {:ok, %{"B" => ""}}
 
-      iex> Envious.parse("KEY=\\"unclosed")
-      {:error, "Parse error at line 1, column 5: could not parse remaining input"}
+      iex> Envious.parse("KEY=value\\n!INVALID")
+      {:error, ~s(Parse error at line 2, column 1: could not parse remaining input starting with: "!INVALID")}
   """
   @spec parse(String.t(), [parse_opt()]) :: {:ok, map()} | {:error, String.t()}
   def parse(str, opts \\ []) do
@@ -114,14 +114,16 @@ defmodule Envious do
         end
 
       # Success but with remaining unparsed input - this is an error
-      {:ok, _parsed, remaining, _context, {line, col}, _offset} when remaining != "" ->
+      # NimbleParsec reports {line, byte offset of line start} and the overall byte offset
+      {:ok, _parsed, remaining, _context, {line, line_offset}, offset} ->
+        column = offset - line_offset + 1
         preview = remaining |> String.slice(0, 20) |> String.trim()
 
         preview_text =
-          if String.length(preview) < String.length(remaining), do: "#{preview}...", else: preview
+          if String.length(remaining) > 20, do: "#{preview}...", else: preview
 
         {:error,
-         "Parse error at line #{line}, column #{col}: could not parse remaining input starting with: #{inspect(preview_text)}"}
+         "Parse error at line #{line}, column #{column}: could not parse remaining input starting with: #{inspect(preview_text)}"}
     end
   end
 
@@ -137,7 +139,7 @@ defmodule Envious do
   end
 
   # Resolve a list of tokens to a string value
-  defp resolve_tokens(tokens, env, undefined_vars) when is_list(tokens) do
+  defp resolve_tokens(tokens, env, undefined_vars) do
     result =
       Enum.reduce_while(tokens, [], fn token, acc ->
         case resolve_token(token, env, undefined_vars) do
@@ -151,9 +153,6 @@ defmodule Envious do
       parts -> {:ok, parts |> Enum.reverse() |> IO.iodata_to_binary()}
     end
   end
-
-  # Handle empty token list
-  defp resolve_tokens([], _env, _undefined_vars), do: {:ok, ""}
 
   # Resolve a single token
   defp resolve_token({:literal, str}, _env, _undefined_vars), do: {:ok, str}
@@ -190,7 +189,7 @@ defmodule Envious do
       %{"A" => "foo", "B" => "foo"}
 
       iex> Envious.parse!("INVALID")
-      ** (RuntimeError) Parse error at line 1, column 0: could not parse remaining input starting with: "INVALID"
+      ** (RuntimeError) Parse error at line 1, column 1: could not parse remaining input starting with: "INVALID"
   """
   @spec parse!(String.t(), [parse_opt()]) :: map()
   def parse!(str, opts \\ []) do

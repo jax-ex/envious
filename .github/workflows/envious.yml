@@ -5,31 +5,63 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-jobs:
-  build:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-    name: Build and test
-    runs-on: ubuntu-22.04
+jobs:
+  test:
+    name: Test (Elixir ${{ matrix.elixir }}, OTP ${{ matrix.otp }})
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest supported versions (mix.exs requires Elixir ~> 1.16)
+          - elixir: '1.16'
+            otp: '26'
+          # Latest versions, also runs lint checks
+          - elixir: '1.20'
+            otp: '29'
+            lint: true
+
+    env:
+      MIX_ENV: test
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Set up Elixir
+      id: beam
       uses: erlef/setup-beam@v1
       with:
-        elixir-version: '1.19.2'
-        otp-version: '28.1'
-    - name: Restore dependencies cache
-      uses: actions/cache@v3
+        elixir-version: ${{ matrix.elixir }}
+        otp-version: ${{ matrix.otp }}
+    - name: Restore dependencies and build cache
+      uses: actions/cache@v6
       with:
-        path: deps
-        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
-        restore-keys: ${{ runner.os }}-mix-
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-
     - name: Install dependencies
       run: mix deps.get
+    - name: Check for unused dependencies
+      if: matrix.lint
+      run: mix deps.unlock --check-unused
+    - name: Check formatting
+      if: matrix.lint
+      run: mix format --check-formatted
+    - name: Compile
+      run: mix compile --warnings-as-errors
     - name: Run tests
       run: mix test
-
+    - name: Build docs
+      if: matrix.lint
+      run: MIX_ENV=dev mix docs --warnings-as-errors

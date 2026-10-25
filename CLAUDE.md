@@ -93,7 +93,7 @@ When modifying the parser, ensure tests cover:
 
 ## Elixir Version
 
-Requires Elixir ~> 1.16 (CI uses 1.19.2 with OTP 28.1)
+Requires Elixir ~> 1.16. CI tests the oldest supported (Elixir 1.16 / OTP 26) and latest (Elixir 1.20 / OTP 29) versions, and runs format, warnings-as-errors, unused-deps and docs checks on the latest.
 
 ## Commit Message Style
 
